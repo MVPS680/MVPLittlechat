@@ -114,28 +114,70 @@ class ChatServer:
     
     def start(self):
         """启动服务器"""
-        try:
-            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            # 设置端口复用，避免服务器重启时出现Address already in use错误
-            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.server_socket.bind(('0.0.0.0', self.port))
-            self.server_socket.listen(5)
-            self.running = True
-            self.start_time = time.time()  # 记录服务器启动时间
-            
-            # 服务器启动成功提示
-            print("=" * 60)
-            print("" * 20 + "聊天服务器启动成功")
-            print("=" * 60)
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 服务器状态: 运行中")
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 监听地址: 0.0.0.0")
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 监听端口: {self.port}")
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 服务器IP: {socket.gethostbyname(socket.gethostname())}")
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 最大连接数: 5")
-            print("=" * 60)
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 等待客户端连接...")
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 提示: 输入 'quit'、'exit' 或 'stop' 可关闭服务器")
-            print("-" * 60)
+        bind_attempts = 0
+        max_attempts = 5
+        bind_success = False
+        
+        while bind_attempts < max_attempts and not bind_success:
+            try:
+                # 创建套接字
+                self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                
+                # 关键：确保在bind之前设置SO_REUSEADDR选项
+                # 对于Windows，这个选项必须在bind之前设置才有效
+                # 特别是打包为exe后，这个设置至关重要
+                self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 已设置 SO_REUSEADDR 选项，允许端口复用")
+                
+                bind_attempts += 1
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 尝试绑定到端口 {self.port}... (尝试 {bind_attempts}/{max_attempts})")
+                
+                # 绑定地址和端口
+                self.server_socket.bind(('0.0.0.0', self.port))
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 成功绑定到端口 {self.port}")
+                
+                # 开始监听连接
+                self.server_socket.listen(5)
+                self.running = True
+                self.start_time = time.time()  # 记录服务器启动时间
+                
+                # 服务器启动成功提示
+                print("=" * 60)
+                print("" * 20 + "聊天服务器启动成功")
+                print("=" * 60)
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 服务器状态: 运行中")
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 监听地址: 0.0.0.0")
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 监听端口: {self.port}")
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 服务器IP: {socket.gethostbyname(socket.gethostname())}")
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 最大连接数: 5")
+                print("=" * 60)
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 等待客户端连接...")
+                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 提示: 输入 'quit'、'exit' 或 'stop' 可关闭服务器")
+                print("-" * 60)
+                
+                bind_success = True
+            except OSError as e:
+                if hasattr(e, 'winerror') and e.winerror == 10048:
+                    # Windows特定错误：地址已被占用
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 警告: 端口 {self.port} 被占用 - {e.strerror}")
+                    if bind_attempts < max_attempts:
+                        # 等待一段时间后重试
+                        wait_time = 1  # 秒
+                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 等待 {wait_time} 秒后重试...")
+                        time.sleep(wait_time)
+                        # 关闭当前套接字，准备下一次尝试
+                        try:
+                            self.server_socket.close()
+                        except:
+                            pass
+                    else:
+                        # 达到最大尝试次数，抛出异常
+                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 错误: 经过 {max_attempts} 次尝试后仍无法绑定到端口 {self.port}")
+                        raise
+                else:
+                    # 其他OSError，直接抛出
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 错误: 绑定端口时发生其他错误 - {e.strerror}")
+                    raise
             
             # 启动命令监听线程
             def command_listener():
