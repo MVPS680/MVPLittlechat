@@ -2,13 +2,21 @@ import sys
 import socket
 import threading
 import time
+import requests
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTextEdit, QFrame, QListWidget,
-    QListWidgetItem, QMenu, QAction, QMessageBox
+    QListWidgetItem, QMenu, QAction, QMessageBox, QProgressDialog
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QObject
+from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread, pyqtSlot
 from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor
+
+# 应用版本信息
+CURRENT_VERSION = "1.0.0"
+# Gitee仓库信息
+GITEE_OWNER = "MVPS680"
+GITEE_REPO = "MVPLittlechat"
+GITEE_TOKEN = "d5e8dbf0042d38a266870e0150b63989"
 
 class Communicate(QObject):
     message_received = pyqtSignal(str)
@@ -127,6 +135,11 @@ class ChatClient(QMainWindow):
         self.users_list.customContextMenuRequested.connect(self.show_context_menu)
         self.users_list.doubleClicked.connect(self.add_mention)
         right_layout.addWidget(self.users_list)
+        
+        # 添加检查更新按钮
+        self.check_update_button = QPushButton("检查更新")
+        self.check_update_button.clicked.connect(self.check_for_updates)
+        right_layout.addWidget(self.check_update_button)
 
         # 添加分隔线
         separator = QFrame()
@@ -625,6 +638,130 @@ class ChatClient(QMainWindow):
         self.connect_frame.show()
         # 重置窗口标题
         self.setWindowTitle("LittleChat -MVP")
+    
+    def check_for_updates(self):
+        """检查Gitee仓库是否有新的发行版"""
+        try:
+            # 构建API请求URL
+            url = f"https://gitee.com/api/v5/repos/{GITEE_OWNER}/{GITEE_REPO}/releases/latest"
+            
+            # 设置请求头，包含Token认证
+            headers = {
+                "Authorization": f"token {GITEE_TOKEN}",
+                "Content-Type": "application/json"
+            }
+            
+            # 发送请求
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            # 解析响应
+            latest_release = response.json()
+            latest_version = latest_release.get("tag_name", "").lstrip("v")
+            download_url = latest_release.get("zipball_url", "")
+            release_notes = latest_release.get("body", "")
+            
+            # 比较版本
+            if self.compare_versions(CURRENT_VERSION, latest_version):
+                # 有新版本
+                self.on_update_available(latest_version, download_url, release_notes)
+            else:
+                QMessageBox.information(self, "检查更新", "当前已是最新版本！")
+                
+        except requests.exceptions.RequestException as e:
+            QMessageBox.critical(self, "检查更新失败", f"网络请求错误：{str(e)}")
+        except Exception as e:
+            QMessageBox.critical(self, "检查更新失败", f"解析错误：{str(e)}")
+    
+    def compare_versions(self, current_ver, latest_ver):
+        """比较版本号，返回是否需要更新"""
+        try:
+            # 解析版本号为列表
+            current = list(map(int, current_ver.split(".")))
+            latest = list(map(int, latest_ver.split(".")))
+            
+            # 比较每个部分
+            for i in range(max(len(current), len(latest))):
+                curr = current[i] if i < len(current) else 0
+                lat = latest[i] if i < len(latest) else 0
+                
+                if lat > curr:
+                    return True
+                elif lat < curr:
+                    return False
+            
+            return False
+        except Exception:
+            # 版本号格式错误，默认不需要更新
+            return False
+    
+    def on_update_available(self, latest_version, download_url, release_notes):
+        """处理更新可用事件"""
+        msg = QMessageBox()
+        msg.setWindowTitle("发现新版本")
+        msg.setText(f"当前版本：{CURRENT_VERSION}\n最新版本：{latest_version}\n\n更新日志：\n{release_notes[:200]}...")
+        msg.setIcon(QMessageBox.Information)
+        
+        # 添加按钮
+        update_button = msg.addButton("立即更新", QMessageBox.AcceptRole)
+        later_button = msg.addButton("稍后更新", QMessageBox.RejectRole)
+        ignore_button = msg.addButton("忽略此版本", QMessageBox.IgnoreRole)
+        
+        msg.exec_()
+        
+        if msg.clickedButton() == update_button:
+            # 开始下载
+            self.download_latest_release(download_url, latest_version)
+    
+    def download_latest_release(self, download_url, latest_version):
+        """下载最新版本"""
+        try:
+            # 设置请求头，包含Token认证
+            headers = {
+                "Authorization": f"token {GITEE_TOKEN}"
+            }
+            
+            # 获取文件大小
+            response = requests.get(download_url, headers=headers, stream=True, timeout=10)
+            response.raise_for_status()
+            
+            total_size = int(response.headers.get("content-length", 0))
+            
+            # 创建进度对话框
+            progress = QProgressDialog("正在下载更新...", "取消", 0, total_size, self)
+            progress.setWindowTitle("下载更新")
+            progress.setWindowModality(Qt.WindowModal)
+            progress.show()
+            
+            # 设置文件名
+            file_name = f"{GITEE_REPO}_v{latest_version}.zip"
+            
+            # 开始下载
+            downloaded_size = 0
+            with open(file_name, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded_size += len(chunk)
+                        
+                        # 更新进度
+                        progress.setValue(downloaded_size)
+                        
+                        # 检查是否取消
+                        if progress.wasCanceled():
+                            # 删除未完成的文件
+                            import os
+                            os.remove(file_name)
+                            QMessageBox.information(self, "下载取消", "更新下载已取消")
+                            return
+            
+            progress.close()
+            QMessageBox.information(self, "下载完成", f"最新版本已下载完成：{file_name}")
+            
+        except requests.exceptions.RequestException as e:
+            QMessageBox.critical(self, "下载失败", f"网络请求错误：{str(e)}")
+        except Exception as e:
+            QMessageBox.critical(self, "下载失败", f"下载错误：{str(e)}")
     
     def closeEvent(self, event):
         # 关闭窗口时断开连接
