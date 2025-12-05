@@ -144,19 +144,62 @@ class ChatServer:
                                     error_message = "ERROR:您不能对自己执行此操作"
                                     client_socket.send(error_message.encode('utf-8'))
                                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 管理员 {nickname} 尝试踢自己")
+                            elif admin_command == 'op':
+                                # 防止管理员自己给自己设为管理员
+                                if target_nickname != nickname:
+                                    # 查找目标用户的socket
+                                    target_socket = None
+                                    with self.lock:
+                                        for sock, n in self.client_nicknames.items():
+                                            if n == target_nickname:
+                                                target_socket = sock
+                                                break
+                                        self.admins.add(target_nickname)
+                                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 管理员 {nickname} 已将 {target_nickname} 设为管理员")
+                                    # 通知所有用户
+                                    broadcast_msg = f"系统: {target_nickname} 已被管理员设为管理员"
+                                    self.broadcast_message(broadcast_msg)
+                                    # 向被设为管理员的用户发送特定消息，触发客户端弹窗
+                                    if target_socket:
+                                        try:
+                                            target_socket.send(f"OP:{broadcast_msg}".encode('utf-8'))
+                                        except:
+                                            pass
+                                else:
+                                    # 发送错误消息给管理员
+                                    error_message = "ERROR:您已经是管理员"
+                                    client_socket.send(error_message.encode('utf-8'))
+                                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 管理员 {nickname} 尝试给自己设为管理员")
                             elif admin_command == 'unop':
                                 # 防止管理员自己撤销自己的权限
                                 if target_nickname != nickname:
+                                    is_admin = False
+                                    target_socket = None
                                     with self.lock:
+                                        # 查找目标用户的socket
+                                        for sock, n in self.client_nicknames.items():
+                                            if n == target_nickname:
+                                                target_socket = sock
+                                                break
                                         if target_nickname in self.admins:
                                             self.admins.remove(target_nickname)
-                                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 管理员 {nickname} 已撤销 {target_nickname} 的管理员权限")
-                                            # 通知所有用户
-                                            self.broadcast_message(f"系统: {target_nickname} 已被管理员撤销管理员权限")
-                                        else:
-                                            error_message = "ERROR:该用户不是管理员"
-                                            client_socket.send(error_message.encode('utf-8'))
-                                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 管理员 {nickname} 尝试撤销非管理员 {target_nickname} 的权限")
+                                            is_admin = True
+                                    
+                                    if is_admin:
+                                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 管理员 {nickname} 已撤销 {target_nickname} 的管理员权限")
+                                        # 通知所有用户 - 移出锁范围，避免死锁
+                                        broadcast_msg = f"系统: {target_nickname} 已被管理员撤销管理员权限"
+                                        self.broadcast_message(broadcast_msg)
+                                        # 向被撤销管理员权限的用户发送特定消息，触发客户端弹窗
+                                        if target_socket:
+                                            try:
+                                                target_socket.send(f"UNOP:{broadcast_msg}".encode('utf-8'))
+                                            except:
+                                                pass
+                                    else:
+                                        error_message = "ERROR:该用户不是管理员"
+                                        client_socket.send(error_message.encode('utf-8'))
+                                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 管理员 {nickname} 尝试撤销非管理员 {target_nickname} 的权限")
                                 else:
                                     # 发送错误消息给管理员
                                     error_message = "ERROR:您不能撤销自己的管理员权限"
@@ -198,11 +241,24 @@ class ChatServer:
                                         if duration > 0:
                                             # 防止管理员自己禁言自己
                                             if actual_target != nickname:
+                                                # 查找目标用户的socket
+                                                target_socket = None
                                                 with self.lock:
+                                                    for sock, n in self.client_nicknames.items():
+                                                        if n == actual_target:
+                                                            target_socket = sock
+                                                            break
                                                     self.muted_users[actual_target] = (time.time(), duration)
                                                 print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 管理员 {nickname} 已禁言 {actual_target} {duration} 分钟")
                                                 # 通知所有用户
-                                                self.broadcast_message(f"系统: {actual_target} 已被管理员禁言 {duration} 分钟")
+                                                broadcast_msg = f"系统: {actual_target} 已被管理员禁言 {duration} 分钟"
+                                                self.broadcast_message(broadcast_msg)
+                                                # 向被禁言的用户发送特定消息，触发客户端弹窗
+                                                if target_socket:
+                                                    try:
+                                                        target_socket.send(f"MUTED:{broadcast_msg}".encode('utf-8'))
+                                                    except:
+                                                        pass
                                             else:
                                                 error_message = "ERROR:您不能禁言自己"
                                                 client_socket.send(error_message.encode('utf-8'))
@@ -222,12 +278,25 @@ class ChatServer:
                             elif admin_command == 'unshutup':
                                 # 防止管理员自己解除自己的禁言
                                 if target_nickname != nickname:
+                                    # 查找目标用户的socket
+                                    target_socket = None
                                     with self.lock:
+                                        for sock, n in self.client_nicknames.items():
+                                            if n == target_nickname:
+                                                target_socket = sock
+                                                break
                                         if target_nickname in self.muted_users:
                                             del self.muted_users[target_nickname]
                                             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 管理员 {nickname} 已解除 {target_nickname} 的禁言")
                                             # 通知所有用户
-                                            self.broadcast_message(f"系统: {target_nickname} 已被管理员解除禁言")
+                                            broadcast_msg = f"系统: {target_nickname} 已被管理员解除禁言"
+                                            self.broadcast_message(broadcast_msg)
+                                            # 向被解禁的用户发送特定消息，触发客户端弹窗
+                                            if target_socket:
+                                                try:
+                                                    target_socket.send(f"UNMUTED:{broadcast_msg}".encode('utf-8'))
+                                                except:
+                                                    pass
                                         else:
                                             error_message = "ERROR:该用户未被禁言"
                                             client_socket.send(error_message.encode('utf-8'))
@@ -250,6 +319,7 @@ class ChatServer:
                     # 检查用户是否被禁言
                     is_muted = False
                     mute_duration = 0
+                    mute_expired = False
                     with self.lock:
                         if nickname in self.muted_users:
                             mute_time, duration = self.muted_users[nickname]
@@ -260,7 +330,11 @@ class ChatServer:
                             else:
                                 # 禁言已过期，自动解除禁言
                                 del self.muted_users[nickname]
-                                self.broadcast_message(f"系统: {nickname} 禁言已过期")
+                                mute_expired = True
+                    
+                    # 移出锁范围，避免死锁
+                    if mute_expired:
+                        self.broadcast_message(f"系统: {nickname} 禁言已过期")
                     
                     if is_muted:
                         # 用户被禁言，发送错误消息
@@ -470,11 +544,24 @@ class ChatServer:
                                 parts = command.split(' ', 1)
                                 if len(parts) == 2:
                                     target_nickname = parts[1].strip()
+                                    # 查找目标用户的socket
+                                    target_socket = None
                                     with self.lock:
+                                        for sock, n in self.client_nicknames.items():
+                                            if n == target_nickname:
+                                                target_socket = sock
+                                                break
                                         self.admins.add(target_nickname)
                                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 已将 {target_nickname} 设置为管理员")
                                     # 通知所有用户
-                                    self.broadcast_message(f"系统: {target_nickname} 已成为管理员")
+                                    broadcast_msg = f"系统: {target_nickname} 已成为管理员"
+                                    self.broadcast_message(broadcast_msg)
+                                    # 向被设为管理员的用户发送特定消息，触发客户端弹窗
+                                    if target_socket:
+                                        try:
+                                            target_socket.send(f"OP:{broadcast_msg}".encode('utf-8'))
+                                        except:
+                                            pass
                                 else:
                                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 命令格式错误: op <用户名>")
                             elif command.startswith('unop '):
@@ -482,14 +569,31 @@ class ChatServer:
                                 parts = command.split(' ', 1)
                                 if len(parts) == 2:
                                     target_nickname = parts[1].strip()
+                                    is_admin = False
+                                    target_socket = None
                                     with self.lock:
+                                        # 查找目标用户的socket
+                                        for sock, n in self.client_nicknames.items():
+                                            if n == target_nickname:
+                                                target_socket = sock
+                                                break
                                         if target_nickname in self.admins:
                                             self.admins.remove(target_nickname)
-                                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 已撤销 {target_nickname} 的管理员权限")
-                                            # 通知所有用户
-                                            self.broadcast_message(f"系统: {target_nickname} 已被撤销管理员权限")
-                                        else:
-                                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ {target_nickname} 不是管理员")
+                                            is_admin = True
+                                    
+                                    if is_admin:
+                                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 已撤销 {target_nickname} 的管理员权限")
+                                        # 通知所有用户
+                                        broadcast_msg = f"系统: {target_nickname} 已被撤销管理员权限"
+                                        self.broadcast_message(broadcast_msg)
+                                        # 向被撤销管理员权限的用户发送特定消息，触发客户端弹窗
+                                        if target_socket:
+                                            try:
+                                                target_socket.send(f"UNOP:{broadcast_msg}".encode('utf-8'))
+                                            except:
+                                                pass
+                                    else:
+                                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ {target_nickname} 不是管理员")
                                 else:
                                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 命令格式错误: unop <用户名>")
                             elif command.startswith('ban '):
@@ -529,11 +633,24 @@ class ChatServer:
                                     try:
                                         duration = int(parts[2].strip())
                                         if duration > 0:
+                                            # 查找目标用户的socket
+                                            target_socket = None
                                             with self.lock:
+                                                for sock, n in self.client_nicknames.items():
+                                                    if n == target_nickname:
+                                                        target_socket = sock
+                                                        break
                                                 self.muted_users[target_nickname] = (time.time(), duration)
                                             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 已禁言 {target_nickname} {duration} 分钟")
                                             # 通知所有用户
-                                            self.broadcast_message(f"系统: {target_nickname} 已被禁言 {duration} 分钟")
+                                            broadcast_msg = f"系统: {target_nickname} 已被禁言 {duration} 分钟"
+                                            self.broadcast_message(broadcast_msg)
+                                            # 向被禁言的用户发送特定消息，触发客户端弹窗
+                                            if target_socket:
+                                                try:
+                                                    target_socket.send(f"MUTED:{broadcast_msg}".encode('utf-8'))
+                                                except:
+                                                    pass
                                         else:
                                             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 禁言时长必须大于0")
                                     except ValueError:
@@ -545,12 +662,25 @@ class ChatServer:
                                 parts = command.split(' ', 1)
                                 if len(parts) == 2:
                                     target_nickname = parts[1].strip()
+                                    target_socket = None
                                     with self.lock:
+                                        # 查找目标用户的socket
+                                        for sock, n in self.client_nicknames.items():
+                                            if n == target_nickname:
+                                                target_socket = sock
+                                                break
                                         if target_nickname in self.muted_users:
                                             del self.muted_users[target_nickname]
                                             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 已解除 {target_nickname} 的禁言")
                                             # 通知所有用户
-                                            self.broadcast_message(f"系统: {target_nickname} 已被解除禁言")
+                                            broadcast_msg = f"系统: {target_nickname} 已被解除禁言"
+                                            self.broadcast_message(broadcast_msg)
+                                            # 向被解禁的用户发送特定消息，触发客户端弹窗
+                                            if target_socket:
+                                                try:
+                                                    target_socket.send(f"UNMUTED:{broadcast_msg}".encode('utf-8'))
+                                                except:
+                                                    pass
                                         else:
                                             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ {target_nickname} 未被禁言")
                                 else:

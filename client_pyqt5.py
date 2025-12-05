@@ -1,6 +1,7 @@
 import sys
 import socket
 import threading
+import time
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTextEdit, QFrame, QListWidget,
@@ -14,6 +15,8 @@ class Communicate(QObject):
     user_list_updated = pyqtSignal(list)
     profile_received = pyqtSignal(str, str, str, str)
     error_message = pyqtSignal(str)
+    notification = pyqtSignal(str, str, str)  # 用于发送通知弹窗，参数：标题、内容、类型
+    show_reconnect_dialog_signal = pyqtSignal()  # 用于触发重连对话框的显示
 
 class ChatClient(QMainWindow):
     def __init__(self):
@@ -23,6 +26,8 @@ class ChatClient(QMainWindow):
         self.nickname = ""
         self.connected = False
         self.online_users = []
+        self.is_muted = False  # 跟踪用户是否被禁言
+        self.showing_reconnect_dialog = False  # 跟踪是否已经显示了重连对话框
         self.initUI()
         self.setup_signals()
 
@@ -143,6 +148,8 @@ class ChatClient(QMainWindow):
         self.comm.user_list_updated.connect(self.update_user_list)
         self.comm.profile_received.connect(self.show_user_profile)
         self.comm.error_message.connect(self.show_error_message)
+        self.comm.notification.connect(self.show_notification)
+        self.comm.show_reconnect_dialog_signal.connect(self.show_reconnect_dialog)
 
     def connect_to_server(self):
         ip = self.ip_entry.text().strip()
@@ -244,15 +251,56 @@ class ChatClient(QMainWindow):
                     # 切换回连接界面
                     self.chat_frame.hide()
                     self.connect_frame.show()
+                elif message.startswith("MUTED:"):
+                    # 处理被禁言消息
+                    mute_message = message.split(":", 1)[1]
+                    # 使用信号来触发GUI操作，确保在主线程中执行
+                    self.comm.message_received.emit(mute_message)
+                    # 发送信号显示禁言提示，确保在主线程中执行
+                    self.comm.notification.emit("禁言通知", "您已被管理员禁言，无法发送消息", "info")
+                    # 设置禁言状态并禁用输入框
+                    self.is_muted = True
+                    self.message_entry.setDisabled(True)
+                    self.send_button.setDisabled(True)
+                elif message.startswith("UNMUTED:"):
+                    # 处理解禁消息
+                    unmute_message = message.split(":", 1)[1]
+                    # 使用信号来触发GUI操作，确保在主线程中执行
+                    self.comm.message_received.emit(unmute_message)
+                    # 发送信号显示解禁提示，确保在主线程中执行
+                    self.comm.notification.emit("解禁通知", "您已被管理员解禁，可以发送消息", "info")
+                    # 取消禁言状态并启用输入框
+                    self.is_muted = False
+                    self.message_entry.setEnabled(True)
+                    self.send_button.setEnabled(True)
+                elif message.startswith("OP:"):
+                    # 处理设为管理员消息
+                    op_message = message.split(":", 1)[1]
+                    # 使用信号来触发GUI操作，确保在主线程中执行
+                    self.comm.message_received.emit(op_message)
+                    # 发送信号显示设为管理员提示，确保在主线程中执行
+                    self.comm.notification.emit("管理员通知", "您已被设为管理员，获得管理权限", "info")
+                elif message.startswith("UNOP:"):
+                    # 处理撤销管理员消息
+                    unop_message = message.split(":", 1)[1]
+                    # 使用信号来触发GUI操作，确保在主线程中执行
+                    self.comm.message_received.emit(unop_message)
+                    # 发送信号显示撤销管理员提示，确保在主线程中执行
+                    self.comm.notification.emit("管理员通知", "您的管理员权限已被撤销", "info")
                 else:
                     # 普通消息，显示在聊天记录中
                     self.comm.message_received.emit(message)
             except ConnectionResetError:
                 self.comm.message_received.emit("系统: 与服务器断开连接")
                 self.connected = False
+                # 发送信号显示重连对话框，确保在主线程中执行
+                self.comm.show_reconnect_dialog_signal.emit()
                 break
             except Exception as e:
                 self.comm.message_received.emit(f"系统: 接收错误 - {str(e)}")
+                self.connected = False
+                # 发送信号显示重连对话框，确保在主线程中执行
+                self.comm.show_reconnect_dialog_signal.emit()
                 break
 
     def display_message(self, message):
@@ -459,6 +507,17 @@ class ChatClient(QMainWindow):
     def show_error_message(self, error_text):
         # 显示错误消息
         QMessageBox.warning(self, "错误", error_text)
+    
+    def show_notification(self, title, content, notification_type):
+        # 显示通知消息，在主线程中执行
+        if notification_type == "info":
+            QMessageBox.information(self, title, content)
+        elif notification_type == "warning":
+            QMessageBox.warning(self, title, content)
+        elif notification_type == "error":
+            QMessageBox.critical(self, title, content)
+        else:
+            QMessageBox.information(self, title, content)
 
     def update_user_list(self, users):
         # 更新在线用户列表
@@ -467,6 +526,106 @@ class ChatClient(QMainWindow):
             item = QListWidgetItem(user)
             self.users_list.addItem(item)
 
+    def show_reconnect_dialog(self):
+        # 如果已经显示了重连对话框，直接返回，避免重复显示
+        if self.showing_reconnect_dialog:
+            return
+        
+        # 设置标志位，表示正在显示重连对话框
+        self.showing_reconnect_dialog = True
+        
+        try:
+            # 显示重连对话框
+            reply = QMessageBox.question(self, "连接断开", 
+                                        f"服务器连接已断开（{self.ip_entry.text()}:{self.port_entry.text()}）是否重连或返回主界面？",
+                                        QMessageBox.Retry | QMessageBox.Cancel, 
+                                        QMessageBox.Retry)
+            if reply == QMessageBox.Retry:
+                # 用户选择重连，尝试5次
+                self.reconnect_to_server()
+            else:
+                # 用户选择返回主界面
+                self.return_to_main()
+        finally:
+            # 无论如何，都要重置标志位，表示重连对话框已经关闭
+            self.showing_reconnect_dialog = False
+    
+    def reconnect_to_server(self):
+        # 尝试重连服务器，最多5次
+        max_retries = 5
+        retry_count = 0
+        success = False
+        
+        while retry_count < max_retries and not success:
+            retry_count += 1
+            self.comm.message_received.emit(f"系统: 尝试第 {retry_count} 次重连...")
+            
+            try:
+                # 关闭旧连接（如果存在）
+                if self.client_socket:
+                    try:
+                        self.client_socket.close()
+                    except:
+                        pass
+                
+                # 创建新连接
+                self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.client_socket.connect((self.ip_entry.text(), int(self.port_entry.text())))
+                # 发送昵称
+                self.client_socket.send(self.nickname.encode('utf-8'))
+                
+                # 接收服务器响应
+                response = self.client_socket.recv(1024).decode('utf-8')
+                
+                if response.startswith("ERROR:"):
+                    # 昵称冲突或其他错误
+                    self.comm.message_received.emit(f"系统: 重连失败 - {response[6:]}")
+                elif response.startswith("SUCCESS:"):
+                    # 重连成功
+                    self.connected = True
+                    success = True
+                    self.comm.message_received.emit("系统: 重连成功！")
+                    
+                    # 启动接收消息线程
+                    receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
+                    receive_thread.start()
+                
+                # 如果成功，退出循环
+                if success:
+                    break
+            except Exception as e:
+                self.comm.message_received.emit(f"系统: 重连失败 - {str(e)}")
+            
+            # 等待1秒后重试
+            if not success and retry_count < max_retries:
+                time.sleep(1)
+        
+        # 如果重连失败，显示失败信息并返回主界面
+        if not success:
+            self.comm.message_received.emit(f"系统: 经过 {max_retries} 次尝试，重连失败，返回主界面")
+            self.return_to_main()
+    
+    def return_to_main(self):
+        # 返回主界面（连接界面）
+        self.connected = False
+        # 关闭旧连接
+        if self.client_socket:
+            try:
+                self.client_socket.close()
+            except:
+                pass
+        
+        # 切换回连接界面
+        main_layout = self.centralWidget().layout()
+        # 移除聊天界面
+        main_layout.removeWidget(self.chat_frame)
+        self.chat_frame.hide()
+        # 添加连接界面
+        main_layout.addWidget(self.connect_frame)
+        self.connect_frame.show()
+        # 重置窗口标题
+        self.setWindowTitle("LittleChat -MVP")
+    
     def closeEvent(self, event):
         # 关闭窗口时断开连接
         if self.connected:
