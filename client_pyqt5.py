@@ -97,6 +97,18 @@ class ChatClient(QMainWindow):
         self.status_label = QLabel("")
         self.status_label.setStyleSheet("color: red;")
         connect_layout.addWidget(self.status_label)
+        
+        # 检查更新按钮
+        self.check_update_button = QPushButton("检查更新")
+        self.check_update_button.setFixedWidth(150)
+        self.check_update_button.clicked.connect(self.check_for_updates)
+        connect_layout.addWidget(self.check_update_button)
+        
+        # 作者信息
+        self.author_label = QLabel("作者: MVP")
+        self.author_label.setStyleSheet("color: gray; font-size: 10px;")
+        self.author_label.setAlignment(Qt.AlignCenter)
+        connect_layout.addWidget(self.author_label)
 
         # 聊天界面
         self.chat_frame = QFrame()
@@ -140,6 +152,12 @@ class ChatClient(QMainWindow):
         self.check_update_button = QPushButton("检查更新")
         self.check_update_button.clicked.connect(self.check_for_updates)
         right_layout.addWidget(self.check_update_button)
+        
+        # 作者信息
+        self.author_label_chat = QLabel("作者: MVP")
+        self.author_label_chat.setStyleSheet("color: gray; font-size: 10px;")
+        self.author_label_chat.setAlignment(Qt.AlignCenter)
+        right_layout.addWidget(self.author_label_chat)
 
         # 添加分隔线
         separator = QFrame()
@@ -658,8 +676,28 @@ class ChatClient(QMainWindow):
             # 解析响应
             latest_release = response.json()
             latest_version = latest_release.get("tag_name", "").lstrip("v")
-            download_url = latest_release.get("zipball_url", "")
+            
+            # 获取下载链接，优先使用assets中的下载链接
+            download_url = ""
+            assets = latest_release.get("assets", [])
+            if assets:
+                # 优先使用第一个asset的浏览器下载链接
+                download_url = assets[0].get("browser_download_url", "")
+            
+            # 如果没有assets，使用zipball_url
+            if not download_url:
+                download_url = latest_release.get("zipball_url", "")
+                
+            # 确保URL有协议前缀
+            if download_url and not (download_url.startswith("http://") or download_url.startswith("https://")):
+                download_url = f"https://gitee.com{download_url}"
+            
             release_notes = latest_release.get("body", "")
+            
+            # 验证下载URL
+            if not download_url:
+                QMessageBox.warning(self, "检查更新", "获取下载链接失败，请稍后再试！")
+                return
             
             # 比较版本
             if self.compare_versions(CURRENT_VERSION, latest_version):
@@ -705,7 +743,7 @@ class ChatClient(QMainWindow):
         # 添加按钮
         update_button = msg.addButton("立即更新", QMessageBox.AcceptRole)
         later_button = msg.addButton("稍后更新", QMessageBox.RejectRole)
-        ignore_button = msg.addButton("忽略此版本", QMessageBox.IgnoreRole)
+        ignore_button = msg.addButton("忽略此版本", QMessageBox.ActionRole)
         
         msg.exec_()
         
