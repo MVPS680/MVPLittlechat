@@ -165,6 +165,8 @@ class ChatServer:
                                             target_socket.send(f"OP:{broadcast_msg}".encode('utf-8'))
                                         except:
                                             pass
+                                    # 更新所有客户端的用户列表，显示管理员标识
+                                    self.broadcast_user_list()
                                 else:
                                     # 发送错误消息给管理员
                                     error_message = "ERROR:您已经是管理员"
@@ -196,6 +198,8 @@ class ChatServer:
                                                 target_socket.send(f"UNOP:{broadcast_msg}".encode('utf-8'))
                                             except:
                                                 pass
+                                        # 更新所有客户端的用户列表，恢复原昵称显示
+                                        self.broadcast_user_list()
                                     else:
                                         error_message = "ERROR:该用户不是管理员"
                                         client_socket.send(error_message.encode('utf-8'))
@@ -403,8 +407,15 @@ class ChatServer:
     def broadcast_user_list(self):
         """广播在线用户列表给所有客户端"""
         with self.lock:
-            # 获取当前在线用户昵称列表
-            users = list(self.client_nicknames.values())
+            # 获取当前在线用户昵称列表，并为管理员添加前缀
+            users = []
+            for sock, nickname in self.client_nicknames.items():
+                if nickname in self.admins:
+                    # 管理员昵称前添加ADMIN：前缀
+                    users.append(f"ADMIN：{nickname}")
+                else:
+                    # 普通用户使用原昵称
+                    users.append(nickname)
         
         # 构造用户列表消息，使用特殊格式以便客户端解析
         user_list_message = f"USERS_LIST:{','.join(users)}"
@@ -562,6 +573,8 @@ class ChatServer:
                                             target_socket.send(f"OP:{broadcast_msg}".encode('utf-8'))
                                         except:
                                             pass
+                                    # 更新所有客户端的用户列表，显示管理员标识
+                                    self.broadcast_user_list()
                                 else:
                                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 命令格式错误: op <用户名>")
                             elif command.startswith('unop '):
@@ -592,6 +605,8 @@ class ChatServer:
                                                 target_socket.send(f"UNOP:{broadcast_msg}".encode('utf-8'))
                                             except:
                                                 pass
+                                        # 更新所有客户端的用户列表，恢复原昵称显示
+                                        self.broadcast_user_list()
                                     else:
                                         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ {target_nickname} 不是管理员")
                                 else:
