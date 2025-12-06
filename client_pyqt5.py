@@ -12,7 +12,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread, pyqtSlot
 from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor
 
 # 应用版本信息
-CURRENT_VERSION = "1.0.0"
+CURRENT_VERSION = "2.1.0"
 # Gitee仓库信息
 GITEE_OWNER = "MVPS680"
 GITEE_REPO = "MVPLittlechat"
@@ -38,6 +38,8 @@ class ChatClient(QMainWindow):
         self.showing_reconnect_dialog = False  # 跟踪是否已经显示了重连对话框
         self.initUI()
         self.setup_signals()
+        # 启动时自动检查更新
+        self.check_for_updates()
 
     def initUI(self):
         self.setWindowTitle("LittleChat -MVP")
@@ -704,7 +706,7 @@ class ChatClient(QMainWindow):
                 # 有新版本
                 self.on_update_available(latest_version, download_url, release_notes)
             else:
-                QMessageBox.information(self, "检查更新", "当前已是最新版本！")
+                QMessageBox.information(self, "检查更新", f"程序版本：{CURRENT_VERSION}。当前已是最新版本！")
                 
         except requests.exceptions.RequestException as e:
             QMessageBox.critical(self, "检查更新失败", f"网络请求错误：{str(e)}")
