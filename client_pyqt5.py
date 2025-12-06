@@ -12,11 +12,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread, pyqtSlot
 from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor
 
 # 应用版本信息
-<<<<<<< HEAD
 CURRENT_VERSION = "2.3.0"
-=======
-CURRENT_VERSION = "2.2.1"
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
 # Gitee仓库信息
 GITEE_OWNER = "MVPS680"
 GITEE_REPO = "MVPLittlechat"
@@ -47,14 +43,9 @@ class ChatClient(QMainWindow):
 
     def initUI(self):
         self.setWindowTitle(f"LittleChat v{CURRENT_VERSION} -MVP")
-<<<<<<< HEAD
         # 放大窗口大小1.5倍
         self.setGeometry(100, 100, 1200, 900)
         self.setMinimumSize(900, 600)
-=======
-        self.setGeometry(100, 100, 800, 600)
-        self.setMinimumSize(600, 400)
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
 
         # 主窗口部件
         central_widget = QWidget()
@@ -63,7 +54,6 @@ class ChatClient(QMainWindow):
 
         # 连接界面
         self.connect_frame = QFrame()
-<<<<<<< HEAD
         self.connect_frame.setObjectName("connectFrame")
         self.connect_frame.setStyleSheet("background-color: #F0F2F5;")
         connect_layout = QVBoxLayout(self.connect_frame)
@@ -269,70 +259,11 @@ class ChatClient(QMainWindow):
         # 作者信息
         self.author_label = QLabel("作者: MVP")
         self.author_label.setStyleSheet("color: #666; font-size: 21px; font-family: 'Microsoft YaHei', SimSun, sans-serif;")
-=======
-        connect_layout = QVBoxLayout(self.connect_frame)
-        connect_layout.setAlignment(Qt.AlignCenter)
-
-        title_label = QLabel("连接到聊天服务器")
-        title_label.setFont(QFont("Arial", 16, QFont.Bold))
-        connect_layout.addWidget(title_label)
-
-        # IP地址输入
-        ip_layout = QHBoxLayout()
-        ip_label = QLabel("服务器IP地址:")
-        self.ip_entry = QLineEdit()
-        self.ip_entry.setText("127.0.0.1")
-        self.ip_entry.setFixedWidth(200)
-        ip_layout.addWidget(ip_label)
-        ip_layout.addWidget(self.ip_entry)
-        connect_layout.addLayout(ip_layout)
-
-        # 端口输入
-        port_layout = QHBoxLayout()
-        port_label = QLabel("服务器端口:")
-        self.port_entry = QLineEdit()
-        self.port_entry.setText("7891")
-        self.port_entry.setFixedWidth(200)
-        port_layout.addWidget(port_label)
-        port_layout.addWidget(self.port_entry)
-        connect_layout.addLayout(port_layout)
-
-        # 昵称输入
-        nick_layout = QHBoxLayout()
-        nick_label = QLabel("您的昵称:")
-        self.nick_entry = QLineEdit()
-        self.nick_entry.setFixedWidth(200)
-        nick_layout.addWidget(nick_label)
-        nick_layout.addWidget(self.nick_entry)
-        connect_layout.addLayout(nick_layout)
-
-        # 连接按钮
-        self.connect_button = QPushButton("连接服务器")
-        self.connect_button.setFixedWidth(150)
-        self.connect_button.clicked.connect(self.connect_to_server)
-        connect_layout.addWidget(self.connect_button)
-
-        # 状态标签
-        self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color: red;")
-        connect_layout.addWidget(self.status_label)
-        
-        # 检查更新按钮
-        self.check_update_button = QPushButton("检查更新")
-        self.check_update_button.setFixedWidth(150)
-        self.check_update_button.clicked.connect(self.check_for_updates)
-        connect_layout.addWidget(self.check_update_button)
-        
-        # 作者信息
-        self.author_label = QLabel("作者: MVP")
-        self.author_label.setStyleSheet("color: gray; font-size: 14px;")
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
         self.author_label.setAlignment(Qt.AlignCenter)
         connect_layout.addWidget(self.author_label)
 
         # 聊天界面
         self.chat_frame = QFrame()
-<<<<<<< HEAD
         self.chat_frame.setObjectName("chatFrame")
         chat_layout = QHBoxLayout(self.chat_frame)
         chat_layout.setContentsMargins(0, 0, 0, 0)
@@ -519,54 +450,6 @@ class ChatClient(QMainWindow):
         users_inner_layout.addWidget(self.author_label_chat)
         
         right_layout.addWidget(users_container)
-=======
-        chat_layout = QHBoxLayout(self.chat_frame)
-
-        # 左侧聊天区域
-        left_layout = QVBoxLayout()
-
-        # 聊天记录
-        self.chat_text = QTextEdit()
-        self.chat_text.setReadOnly(True)
-        self.chat_text.setFont(QFont("SimSun", 10))
-        left_layout.addWidget(self.chat_text)
-
-        # 消息输入区域
-        input_layout = QHBoxLayout()
-        self.message_entry = QLineEdit()
-        self.message_entry.setPlaceholderText("输入消息... (按Enter发送, @用户名可以@指定用户)")
-        self.message_entry.returnPressed.connect(self.send_message)
-        input_layout.addWidget(self.message_entry)
-
-        self.send_button = QPushButton("发送")
-        self.send_button.clicked.connect(self.send_message)
-        input_layout.addWidget(self.send_button)
-
-        left_layout.addLayout(input_layout)
-
-        # 右侧用户列表
-        right_layout = QVBoxLayout()
-        users_label = QLabel("在线用户")
-        users_label.setAlignment(Qt.AlignCenter)
-        right_layout.addWidget(users_label)
-
-        self.users_list = QListWidget()
-        self.users_list.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.users_list.customContextMenuRequested.connect(self.show_context_menu)
-        self.users_list.doubleClicked.connect(self.add_mention)
-        right_layout.addWidget(self.users_list)
-        
-        # 添加检查更新按钮
-        self.check_update_button = QPushButton("检查更新")
-        self.check_update_button.clicked.connect(self.check_for_updates)
-        right_layout.addWidget(self.check_update_button)
-        
-        # 作者信息
-        self.author_label_chat = QLabel("作者: MVP")
-        self.author_label_chat.setStyleSheet("color: gray; font-size: 12px;")
-        self.author_label_chat.setAlignment(Qt.AlignCenter)
-        right_layout.addWidget(self.author_label_chat)
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
 
         # 添加分隔线
         separator = QFrame()
