@@ -12,7 +12,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread, pyqtSlot
 from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor
 
 # 应用版本信息
-CURRENT_VERSION = "2.1.1"
+CURRENT_VERSION = "2.1.2"
 # Gitee仓库信息
 GITEE_OWNER = "MVPS680"
 GITEE_REPO = "MVPLittlechat"
@@ -42,7 +42,7 @@ class ChatClient(QMainWindow):
         self.check_for_updates()
 
     def initUI(self):
-        self.setWindowTitle("LittleChat -MVP")
+        self.setWindowTitle(f"LittleChat v{CURRENT_VERSION} -MVP")
         self.setGeometry(100, 100, 800, 600)
         self.setMinimumSize(600, 400)
 
@@ -108,7 +108,7 @@ class ChatClient(QMainWindow):
         
         # 作者信息
         self.author_label = QLabel("作者: MVP")
-        self.author_label.setStyleSheet("color: gray; font-size: 10px;")
+        self.author_label.setStyleSheet("color: gray; font-size: 14px;")
         self.author_label.setAlignment(Qt.AlignCenter)
         connect_layout.addWidget(self.author_label)
 
@@ -157,7 +157,7 @@ class ChatClient(QMainWindow):
         
         # 作者信息
         self.author_label_chat = QLabel("作者: MVP")
-        self.author_label_chat.setStyleSheet("color: gray; font-size: 10px;")
+        self.author_label_chat.setStyleSheet("color: gray; font-size: 12px;")
         self.author_label_chat.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(self.author_label_chat)
 
@@ -230,7 +230,7 @@ class ChatClient(QMainWindow):
                 main_layout.addWidget(self.chat_frame)
                 self.chat_frame.show()
                 # 设置窗口标题
-                self.setWindowTitle(f"LittleChat-MVP 当前用户：{self.nickname}")
+                self.setWindowTitle(f"LittleChat v{CURRENT_VERSION} -MVP 当前用户：{self.nickname}")
                 self.message_entry.setFocus()
 
                 # 启动接收消息线程
@@ -706,7 +706,7 @@ class ChatClient(QMainWindow):
                 # 有新版本
                 self.on_update_available(latest_version, download_url, release_notes)
             else:
-                QMessageBox.information(self, "检查更新", f"程序版本：{CURRENT_VERSION}。当前已是最新版本！")
+                QMessageBox.information(self, "检查更新", f"程序版本：{CURRENT_VERSION} \n当前已是最新版本！")
                 
         except requests.exceptions.RequestException as e:
             QMessageBox.critical(self, "检查更新失败", f"网络请求错误：{str(e)}")
@@ -739,7 +739,7 @@ class ChatClient(QMainWindow):
         """处理更新可用事件"""
         msg = QMessageBox()
         msg.setWindowTitle("发现新版本")
-        msg.setText(f"当前版本：{CURRENT_VERSION}\n最新版本：{latest_version}\n\n更新日志：\n{release_notes[:200]}...")
+        msg.setText(f"当前版本：{CURRENT_VERSION}\n最新版本：{latest_version}\n\n更新日志：\n{release_notes}")
         msg.setIcon(QMessageBox.Information)
         
         # 添加按钮
