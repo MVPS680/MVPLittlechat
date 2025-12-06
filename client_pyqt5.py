@@ -455,21 +455,15 @@ class ChatClient(QMainWindow):
         separator = QFrame()
         separator.setFrameShape(QFrame.VLine)
         separator.setFrameShadow(QFrame.Sunken)
-<<<<<<< HEAD
         separator.setStyleSheet("background-color: #E0E0E0;")
-=======
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
 
         # 组装聊天界面
         chat_layout.addLayout(left_layout, 3)
         chat_layout.addWidget(separator)
         chat_layout.addLayout(right_layout, 1)
-<<<<<<< HEAD
         
         # 设置整体背景色
         self.chat_frame.setStyleSheet("background-color: #F0F2F5;")
-=======
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
 
         # 初始显示连接界面
         main_layout.addWidget(self.connect_frame)
@@ -536,12 +530,9 @@ class ChatClient(QMainWindow):
                 # 启动接收消息线程
                 receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
                 receive_thread.start()
-<<<<<<< HEAD
                 
                 # 显示系统消息：你加入了聊天室
                 self.add_bubble_message("系统: 你加入了聊天室")
-=======
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
 
         except ConnectionRefusedError:
             self.status_label.setText("无法连接到服务器：服务器未启动")
@@ -642,7 +633,6 @@ class ChatClient(QMainWindow):
                 self.comm.show_reconnect_dialog_signal.emit()
                 break
 
-<<<<<<< HEAD
     def add_bubble_message(self, message, is_self=False):
         """添加气泡消息到聊天记录"""
         if is_self:
@@ -720,20 +710,6 @@ class ChatClient(QMainWindow):
                 sender = message.split(":", 1)[0].strip()
                 # 弹出通知弹窗
                 QMessageBox.information(self, "@提及通知", f"{sender} 在聊天中提到了你")
-=======
-    def display_message(self, message):
-        self.chat_text.append(message)
-        # 检查是否有@自己的消息
-        if f"@{self.nickname}" in message:
-            self.highlight_mention(message)
-            # 只在收到其他用户的消息且@自己时弹出弹窗，自己发送的消息不弹出
-            if not message.startswith("我:"):
-                # 提取发送者昵称
-                if ":" in message:
-                    sender = message.split(":", 1)[0]
-                    # 弹出通知弹窗
-                    QMessageBox.information(self, "@提及通知", f"{sender} 在聊天中提到了你")
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
 
     def highlight_mention(self, message):
         # 高亮显示@自己的消息
@@ -766,7 +742,6 @@ class ChatClient(QMainWindow):
                             # 发送命令给服务器
                             admin_command = f"ADMIN_COMMAND:{command}:{target_nickname}"
                             self.client_socket.send(admin_command.encode('utf-8'))
-<<<<<<< HEAD
                             self.add_bubble_message(message, is_self=True)
                             self.message_entry.clear()
                         else:
@@ -774,15 +749,6 @@ class ChatClient(QMainWindow):
                             self.message_entry.clear()
                     else:
                         self.add_bubble_message("系统: 命令格式错误: /kick <用户名>")
-=======
-                            self.chat_text.append(f"我: {message}")
-                            self.message_entry.clear()
-                        else:
-                            self.chat_text.append("系统: 您不能对自己执行此操作")
-                            self.message_entry.clear()
-                    else:
-                        self.chat_text.append("系统: 命令格式错误: /kick <用户名>")
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
                         self.message_entry.clear()
                 elif command == 'unop':
                     if len(parts) == 2:
@@ -792,7 +758,6 @@ class ChatClient(QMainWindow):
                             # 发送命令给服务器
                             admin_command = f"ADMIN_COMMAND:{command}:{target_nickname}"
                             self.client_socket.send(admin_command.encode('utf-8'))
-<<<<<<< HEAD
                             self.add_bubble_message(message, is_self=True)
                             self.message_entry.clear()
                         else:
@@ -800,15 +765,6 @@ class ChatClient(QMainWindow):
                             self.message_entry.clear()
                     else:
                         self.add_bubble_message("系统: 命令格式错误: /unop <用户名>")
-=======
-                            self.chat_text.append(f"我: {message}")
-                            self.message_entry.clear()
-                        else:
-                            self.chat_text.append("系统: 您不能撤销自己的管理员权限")
-                            self.message_entry.clear()
-                    else:
-                        self.chat_text.append("系统: 命令格式错误: /unop <用户名>")
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
                         self.message_entry.clear()
                 elif command == 'ban':
                     if len(parts) == 2:
@@ -818,7 +774,6 @@ class ChatClient(QMainWindow):
                             # 发送命令给服务器
                             admin_command = f"ADMIN_COMMAND:{command}:{target_nickname}"
                             self.client_socket.send(admin_command.encode('utf-8'))
-<<<<<<< HEAD
                             self.add_bubble_message(message, is_self=True)
                             self.message_entry.clear()
                         else:
@@ -826,15 +781,6 @@ class ChatClient(QMainWindow):
                             self.message_entry.clear()
                     else:
                         self.add_bubble_message("系统: 命令格式错误: /ban <用户名>")
-=======
-                            self.chat_text.append(f"我: {message}")
-                            self.message_entry.clear()
-                        else:
-                            self.chat_text.append("系统: 您不能封禁自己")
-                            self.message_entry.clear()
-                    else:
-                        self.chat_text.append("系统: 命令格式错误: /ban <用户名>")
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
                         self.message_entry.clear()
                 elif command == 'unban':
                     if len(parts) == 2:
@@ -842,17 +788,10 @@ class ChatClient(QMainWindow):
                         # 发送命令给服务器
                         admin_command = f"ADMIN_COMMAND:{command}:{target_nickname}"
                         self.client_socket.send(admin_command.encode('utf-8'))
-<<<<<<< HEAD
                         self.add_bubble_message(message, is_self=True)
                         self.message_entry.clear()
                     else:
                         self.add_bubble_message("系统: 命令格式错误: /unban <用户名>")
-=======
-                        self.chat_text.append(f"我: {message}")
-                        self.message_entry.clear()
-                    else:
-                        self.chat_text.append("系统: 命令格式错误: /unban <用户名>")
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
                         self.message_entry.clear()
                 elif command == 'shutup':
                     if len(parts) == 2:
@@ -866,7 +805,6 @@ class ChatClient(QMainWindow):
                                 # 发送命令给服务器
                                 admin_command = f"ADMIN_COMMAND:{command}:{target_nickname} {duration}"
                                 self.client_socket.send(admin_command.encode('utf-8'))
-<<<<<<< HEAD
                                 self.add_bubble_message(message, is_self=True)
                                 self.message_entry.clear()
                             else:
@@ -877,18 +815,6 @@ class ChatClient(QMainWindow):
                             self.message_entry.clear()
                     else:
                         self.add_bubble_message("系统: 命令格式错误: /shutup <用户名> <时间（分钟）>")
-=======
-                                self.chat_text.append(f"我: {message}")
-                                self.message_entry.clear()
-                            else:
-                                self.chat_text.append("系统: 您不能禁言自己")
-                                self.message_entry.clear()
-                        else:
-                            self.chat_text.append("系统: 命令格式错误: /shutup <用户名> <时间（分钟）>")
-                            self.message_entry.clear()
-                    else:
-                        self.chat_text.append("系统: 命令格式错误: /shutup <用户名> <时间（分钟）>")
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
                         self.message_entry.clear()
                 elif command == 'unshutup':
                     if len(parts) == 2:
@@ -898,7 +824,6 @@ class ChatClient(QMainWindow):
                             # 发送命令给服务器
                             admin_command = f"ADMIN_COMMAND:{command}:{target_nickname}"
                             self.client_socket.send(admin_command.encode('utf-8'))
-<<<<<<< HEAD
                             self.add_bubble_message(message, is_self=True)
                             self.message_entry.clear()
                         else:
@@ -910,36 +835,15 @@ class ChatClient(QMainWindow):
                 else:
                     # 不支持的命令
                     self.add_bubble_message(f"系统: 不支持的命令: {command}")
-=======
-                            self.chat_text.append(f"我: {message}")
-                            self.message_entry.clear()
-                        else:
-                            self.chat_text.append("系统: 您不能解除自己的禁言")
-                            self.message_entry.clear()
-                    else:
-                        self.chat_text.append("系统: 命令格式错误: /unshutup <用户名>")
-                        self.message_entry.clear()
-                else:
-                    # 不支持的命令
-                    self.chat_text.append(f"系统: 不支持的命令: {command}")
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
                     self.message_entry.clear()
             else:
                 # 普通消息
                 self.client_socket.send(message.encode('utf-8'))
-<<<<<<< HEAD
                 # 在聊天记录中显示自己发送的消息（气泡样式）
                 self.add_bubble_message(message, is_self=True)
                 self.message_entry.clear()
         except Exception as e:
             self.add_bubble_message(f"系统: 发送失败 - {str(e)}")
-=======
-                # 在聊天记录中显示自己发送的消息
-                self.chat_text.append(f"我: {message}")
-                self.message_entry.clear()
-        except Exception as e:
-            self.chat_text.append(f"系统: 发送失败 - {str(e)}")
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
 
     def show_context_menu(self, pos):
         # 获取右键点击的项目
