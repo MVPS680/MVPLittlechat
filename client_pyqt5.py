@@ -12,11 +12,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread, pyqtSlot
 from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor
 
 # 应用版本信息
-<<<<<<< HEAD
 CURRENT_VERSION = "2.3.0"
-=======
-CURRENT_VERSION = "2.2.1"
->>>>>>> 2d24d323418f153d54fa4847084755382db36c5c
 # Gitee仓库信息
 GITEE_OWNER = "MVPS680"
 GITEE_REPO = "MVPLittlechat"
