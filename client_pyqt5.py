@@ -16,7 +16,7 @@ CURRENT_VERSION = "2.1.1"
 # Gitee仓库信息
 GITEE_OWNER = "MVPS680"
 GITEE_REPO = "MVPLittlechat"
-GITEE_TOKEN = "d5e8dbf0042d38a266870e0150b63989"
+GITEE_TOKEN = "f19052b74c6322d54137ff8caa114093"
 
 class Communicate(QObject):
     message_received = pyqtSignal(str)
