@@ -10,7 +10,8 @@ class ChatServer:
         self.client_nicknames = {}
         self.client_profiles = {}
         self.admins = set()  # 管理员列表
-        self.banned_users = set()  # 封禁的用户名列表
+        self.banned_users = set()  # 封禁的用户名列表（保留兼容，实际使用IP封禁）
+        self.banned_ips = set()  # 封禁的IP地址列表
         self.muted_users = {}  # 禁言的用户名和禁言时长，格式: {nickname: (mute_time, duration)}
         self.lock = threading.Lock()  # 线程锁，保护客户端列表
         self.running = False
@@ -47,8 +48,17 @@ class ChatServer:
             if nickname_data:
                 nickname = nickname_data.strip()
             
-            # 检查用户是否被封禁
+            # 检查用户IP是否被封禁
             with self.lock:
+                # 先检查IP是否被封禁
+                if client_address[0] in self.banned_ips:
+                    # IP已被封禁，发送错误消息并关闭连接
+                    error_message = "ERROR:您的IP已被封禁，无法连接"
+                    client_socket.send(error_message.encode('utf-8'))
+                    client_socket.close()
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 被封禁IP {client_address[0]} 尝试连接，使用昵称: {nickname}")
+                    return
+                # 保留用户名封禁检查，兼容旧逻辑
                 if nickname in self.banned_users:
                     # 用户已被封禁，发送错误消息并关闭连接
                     error_message = "ERROR:您已被封禁，无法连接"
@@ -212,29 +222,75 @@ class ChatServer:
                             elif admin_command == 'ban':
                                 # 防止管理员自己封禁自己
                                 if target_nickname != nickname:
+                                    # 查找目标用户的IP地址
+                                    target_ip = None
                                     with self.lock:
-                                        self.banned_users.add(target_nickname)
-                                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 管理员 {nickname} 已封禁 {target_nickname}")
-                                    # 踢出该用户（如果在线）
-                                    self.kick_user(target_nickname)
-                                    # 通知所有用户
-                                    self.broadcast_message(f"系统: {target_nickname} 已被管理员封禁")
+                                        for sock, n in self.client_nicknames.items():
+                                            if n == target_nickname:
+                                                # 找到目标用户，获取其IP地址
+                                                if sock in self.client_profiles:
+                                                    target_ip = self.client_profiles[sock]['ip_address']
+                                                break
+                                    
+                                    if target_ip:
+                                        # 封禁目标用户的IP
+                                        with self.lock:
+                                            self.banned_ips.add(target_ip)
+                                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 管理员 {nickname} 已封禁IP {target_ip}（用户：{target_nickname}）")
+                                        # 踢出该用户（如果在线）
+                                        self.kick_user(target_nickname)
+                                        # 通知所有用户
+                                        self.broadcast_message(f"系统: 用户 {target_nickname} 的IP {target_ip} 已被管理员封禁")
+                                    else:
+                                        # 用户不在线或找不到IP
+                                        error_message = f"ERROR:找不到用户 {target_nickname} 或其IP地址"
+                                        client_socket.send(error_message.encode('utf-8'))
+                                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 管理员 {nickname} 尝试封禁不存在的用户 {target_nickname}")
                                 else:
                                     # 发送错误消息给管理员
                                     error_message = "ERROR:您不能封禁自己"
                                     client_socket.send(error_message.encode('utf-8'))
                                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 管理员 {nickname} 尝试封禁自己")
                             elif admin_command == 'unban':
-                                with self.lock:
-                                    if target_nickname in self.banned_users:
-                                        self.banned_users.remove(target_nickname)
-                                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 管理员 {nickname} 已解除 {target_nickname} 的封禁")
-                                        # 通知所有用户
-                                        self.broadcast_message(f"系统: {target_nickname} 已被管理员解除封禁")
-                                    else:
-                                        error_message = "ERROR:该用户未被封禁"
-                                        client_socket.send(error_message.encode('utf-8'))
-                                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 管理员 {nickname} 尝试解除未封禁用户 {target_nickname} 的封禁")
+                                # 支持两种方式解除封禁：直接使用IP地址，或通过用户名查找IP
+                                target_ip = None
+                                target_user = target_nickname  # 保存原始目标名称
+                                
+                                # 检查目标是否是IP地址格式
+                                import re
+                                ip_pattern = r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'
+                                if re.match(ip_pattern, target_nickname):
+                                    # 直接使用IP地址
+                                    target_ip = target_nickname
+                                else:
+                                    # 尝试通过用户名查找IP地址
+                                    with self.lock:
+                                        for sock, n in self.client_nicknames.items():
+                                            if n == target_nickname:
+                                                # 找到目标用户，获取其IP地址
+                                                if sock in self.client_profiles:
+                                                    target_ip = self.client_profiles[sock]['ip_address']
+                                                break
+                                
+                                if target_ip:
+                                    with self.lock:
+                                        if target_ip in self.banned_ips:
+                                            self.banned_ips.remove(target_ip)
+                                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 管理员 {nickname} 已解除IP {target_ip} 的封禁")
+                                            # 通知所有用户
+                                            if target_user != target_ip:
+                                                self.broadcast_message(f"系统: 用户 {target_user} 的IP {target_ip} 已被管理员解除封禁")
+                                            else:
+                                                self.broadcast_message(f"系统: IP {target_ip} 已被管理员解除封禁")
+                                        else:
+                                            error_message = f"ERROR:该IP {target_ip} 未被封禁"
+                                            client_socket.send(error_message.encode('utf-8'))
+                                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 管理员 {nickname} 尝试解除未封禁IP {target_ip} 的封禁")
+                                else:
+                                    # 无法找到目标IP
+                                    error_message = f"ERROR:找不到目标 {target_nickname} 或其IP地址"
+                                    client_socket.send(error_message.encode('utf-8'))
+                                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 管理员 {nickname} 尝试解除不存在的目标 {target_nickname} 的封禁")
                             elif admin_command == 'shutup':
                                 # 提取禁言时长
                                 duration_part = target_nickname.split(' ', 1)
@@ -522,7 +578,7 @@ class ChatServer:
                     """监听用户输入的命令"""
                     while self.running:
                         try:
-                            command = input().strip().lower()
+                            command = input("MVPLittleChat> ").strip().lower()
                             if command in ['quit', 'exit', 'stop']:
                                 print("\n" + "=" * 60)
                                 print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ⚠️  收到退出命令，正在关闭服务器...")
@@ -537,8 +593,8 @@ class ChatServer:
                                 print("  op <用户名>       - 将指定用户设置为管理员")
                                 print("  unop <用户名>     - 撤销指定用户的管理员权限")
                                 print("  kick <用户名>     - 踢出指定用户")
-                                print("  ban <用户名>      - 封禁指定用户")
-                                print("  unban <用户名>    - 解除指定用户的封禁")
+                                print("  ban <用户名>      - 封禁指定用户的IP")
+                                print("  unban <用户名或IP>    - 解除指定IP的封禁")
                                 print("  shutup <用户名> <时间> - 禁言指定时长（分钟）")
                                 print("  unshutup <用户名> - 解除指定用户的禁言")
                                 print("-" * 60)
@@ -616,30 +672,71 @@ class ChatServer:
                                 parts = command.split(' ', 1)
                                 if len(parts) == 2:
                                     target_nickname = parts[1].strip()
+                                    # 查找目标用户的IP地址
+                                    target_ip = None
                                     with self.lock:
-                                        self.banned_users.add(target_nickname)
-                                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 已封禁 {target_nickname}")
-                                    # 踢出该用户（如果在线）
-                                    self.kick_user(target_nickname)
-                                    # 通知所有用户
-                                    self.broadcast_message(f"系统: {target_nickname} 已被封禁")
+                                        for sock, n in self.client_nicknames.items():
+                                            if n == target_nickname:
+                                                # 找到目标用户，获取其IP地址
+                                                if sock in self.client_profiles:
+                                                    target_ip = self.client_profiles[sock]['ip_address']
+                                                break
+                                    
+                                    if target_ip:
+                                        # 封禁目标用户的IP
+                                        with self.lock:
+                                            self.banned_ips.add(target_ip)
+                                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 已封禁IP {target_ip}（用户：{target_nickname}）")
+                                        # 踢出该用户（如果在线）
+                                        self.kick_user(target_nickname)
+                                        # 通知所有用户
+                                        self.broadcast_message(f"系统: 用户 {target_nickname} 的IP {target_ip} 已被封禁")
+                                    else:
+                                        # 用户不在线或找不到IP
+                                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 找不到用户 {target_nickname} 或其IP地址")
                                 else:
                                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 命令格式错误: ban <用户名>")
                             elif command.startswith('unban '):
                                 # 处理unban命令
                                 parts = command.split(' ', 1)
                                 if len(parts) == 2:
-                                    target_nickname = parts[1].strip()
-                                    with self.lock:
-                                        if target_nickname in self.banned_users:
-                                            self.banned_users.remove(target_nickname)
-                                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 已解除 {target_nickname} 的封禁")
-                                            # 通知所有用户
-                                            self.broadcast_message(f"系统: {target_nickname} 已被解除封禁")
-                                        else:
-                                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ {target_nickname} 未被封禁")
+                                    target = parts[1].strip()
+                                    target_ip = None
+                                    target_user = target  # 保存原始目标名称
+                                    
+                                    # 检查目标是否是IP地址格式
+                                    import re
+                                    ip_pattern = r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'
+                                    if re.match(ip_pattern, target):
+                                        # 直接使用IP地址
+                                        target_ip = target
+                                    else:
+                                        # 尝试通过用户名查找IP地址
+                                        with self.lock:
+                                            for sock, n in self.client_nicknames.items():
+                                                if n == target:
+                                                    # 找到目标用户，获取其IP地址
+                                                    if sock in self.client_profiles:
+                                                        target_ip = self.client_profiles[sock]['ip_address']
+                                                    break
+                                    
+                                    if target_ip:
+                                        with self.lock:
+                                            if target_ip in self.banned_ips:
+                                                self.banned_ips.remove(target_ip)
+                                                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 已解除IP {target_ip} 的封禁")
+                                                # 通知所有用户
+                                                if target_user != target_ip:
+                                                    self.broadcast_message(f"系统: 用户 {target_user} 的IP {target_ip} 已被解除封禁")
+                                                else:
+                                                    self.broadcast_message(f"系统: IP {target_ip} 已被解除封禁")
+                                            else:
+                                                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ IP {target_ip} 未被封禁")
+                                    else:
+                                        # 无法找到目标IP
+                                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 找不到目标 {target} 或其IP地址")
                                 else:
-                                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 命令格式错误: unban <用户名>")
+                                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 命令格式错误: unban <用户名或IP>")
                             elif command.startswith('shutup '):
                                 # 处理shutup命令
                                 parts = command.split(' ', 2)
