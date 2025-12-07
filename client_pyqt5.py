@@ -8,15 +8,146 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QTextEdit, QFrame, QListWidget,
     QListWidgetItem, QMenu, QAction, QMessageBox, QProgressDialog
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread, pyqtSlot
-from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor
+from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread, pyqtSlot, QTimer
+from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor, QPixmap
 
 # 应用版本信息
-CURRENT_VERSION = "2.3.1"
+CURRENT_VERSION = "2.4.0"
 # Gitee仓库信息
 GITEE_OWNER = "MVPS680"
 GITEE_REPO = "MVPLittlechat"
 GITEE_TOKEN = "f19052b74c6322d54137ff8caa114093"
+
+# MIT许可证内容
+MIT_LICENSE = """MIT License 
+ 
+ Copyright (c) 2025 MVP 
+ 
+ Permission is hereby granted, free of charge, to any person obtaining a copy 
+ of this software and associated documentation files (the "Software"), to deal 
+ in the Software without restriction, including without limitation the rights 
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell 
+ copies of the Software, and to permit persons to whom the Software is 
+ furnished to do so, subject to the following conditions: 
+ 
+ The above copyright notice and this permission notice shall be included in all 
+ copies or substantial portions of the Software. 
+ 
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
+ SOFTWARE. 
+ """
+
+class LicenseWindow(QWidget):
+    """法律性声明窗口"""
+    agreed = pyqtSignal()  # 用户同意信号
+    
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("这是一份法律性声明")
+        self.setMinimumSize(600, 500)
+        self.setWindowModality(Qt.ApplicationModal)  # 模态窗口
+        
+        # 创建布局
+        layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        layout.setContentsMargins(30, 30, 30, 30)
+        
+        # 添加标题
+        title_label = QLabel("法律性声明")
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("""
+            QLabel {
+                font-size: 28px;
+                font-weight: bold;
+                color: #333;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                margin-bottom: 20px;
+            }
+        """)
+        layout.addWidget(title_label)
+        
+        # 添加许可证内容
+        license_text = QTextEdit()
+        license_text.setPlainText(MIT_LICENSE)
+        license_text.setReadOnly(True)
+        license_text.setStyleSheet("""
+            QTextEdit {
+                background-color: #F5F5F5;
+                border: 1px solid #E0E0E0;
+                border-radius: 8px;
+                padding: 15px;
+                font-size: 16px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+        """)
+        layout.addWidget(license_text)
+        
+        # 添加同意复选框
+        checkbox_layout = QHBoxLayout()
+        self.agree_checkbox = QLabel("我同意以上协议")
+        self.agree_checkbox.setAlignment(Qt.AlignCenter)
+        self.agree_checkbox.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                color: #333;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+        """)
+        # 使用setCursor方法设置鼠标指针
+        self.agree_checkbox.setCursor(Qt.PointingHandCursor)
+        self.agree_checkbox.mousePressEvent = self.toggle_checkbox
+        self.is_checked = False
+        self.update_checkbox_text()
+        checkbox_layout.addWidget(self.agree_checkbox)
+        layout.addLayout(checkbox_layout)
+        
+        # 添加确认按钮
+        self.confirm_button = QPushButton("确认")
+        self.confirm_button.setObjectName("confirmButton")
+        self.confirm_button.clicked.connect(self.on_confirm)
+        self.confirm_button.setEnabled(False)  # 初始禁用
+        self.confirm_button.setStyleSheet("""
+            QPushButton#confirmButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 30px;
+                padding: 15px 45px;
+                font-size: 20px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#confirmButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton#confirmButton:disabled {
+                background-color: #BDBDBD;
+            }
+        """)
+        layout.addWidget(self.confirm_button, alignment=Qt.AlignCenter)
+    
+    def toggle_checkbox(self, event):
+        """切换复选框状态"""
+        self.is_checked = not self.is_checked
+        self.update_checkbox_text()
+        self.confirm_button.setEnabled(self.is_checked)
+    
+    def update_checkbox_text(self):
+        """更新复选框文本"""
+        checkmark = "☑️ " if self.is_checked else "☐ "
+        self.agree_checkbox.setText(f"{checkmark}我同意以上协议")
+    
+    def on_confirm(self):
+        """用户点击确认按钮"""
+        if self.is_checked:
+            self.agreed.emit()
+            self.close()
 
 class Communicate(QObject):
     message_received = pyqtSignal(str)
@@ -38,9 +169,14 @@ class ChatClient(QMainWindow):
         self.showing_reconnect_dialog = False  # 跟踪是否已经显示了重连对话框
         self.initUI()
         self.setup_signals()
-        # 连接服务器界面显示后2秒自动检查更新
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(1000, self.check_for_updates)
+        # 连接服务器界面显示后1秒获取一言
+        QTimer.singleShot(1000, self.get_hitokoto)
+    
+    def showEvent(self, event):
+        """窗口显示时调用"""
+        super().showEvent(event)
+        # 主窗口加载后500ms自动检查更新
+        QTimer.singleShot(500, self.check_for_updates)
 
     def initUI(self):
         self.setWindowTitle(f"LittleChat v{CURRENT_VERSION} -MVP")
@@ -257,6 +393,21 @@ class ChatClient(QMainWindow):
         form_layout.addLayout(button_layout)
         connect_layout.addWidget(form_container)
         
+        # 一言显示标签
+        self.hitokoto_label = QLabel("...")
+        self.hitokoto_label.setStyleSheet("""
+            QLabel {
+                color: #999;
+                font-size: 18px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                font-style: italic;
+                text-align: center;
+                margin: 20px 0;
+            }
+        """)
+        self.hitokoto_label.setAlignment(Qt.AlignCenter)
+        connect_layout.addWidget(self.hitokoto_label)
+        
         # 作者信息
         self.author_label = QLabel("作者: MVP")
         self.author_label.setStyleSheet("color: #666; font-size: 21px; font-family: 'Microsoft YaHei', SimSun, sans-serif;")
@@ -444,6 +595,26 @@ class ChatClient(QMainWindow):
         """)
         users_inner_layout.addWidget(self.check_update_button)
         
+        # 添加显示QR码按钮
+        self.show_qrcode_button = QPushButton("IP二维码")
+        self.show_qrcode_button.setObjectName("showQrcodeButton")
+        self.show_qrcode_button.clicked.connect(self.show_qrcode_dialog)
+        self.show_qrcode_button.setStyleSheet("""
+            QPushButton#showQrcodeButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 12px;
+                padding: 12px 22px;
+                font-size: 16px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#showQrcodeButton:hover {
+                background-color: #1976D2;
+            }
+        """)
+        users_inner_layout.addWidget(self.show_qrcode_button)
+        
         # 作者信息
         self.author_label_chat = QLabel("作者: MVP")
         self.author_label_chat.setAlignment(Qt.AlignCenter)
@@ -534,6 +705,8 @@ class ChatClient(QMainWindow):
                 
                 # 显示系统消息：你加入了聊天室
                 self.add_bubble_message("系统: 你加入了聊天室")
+                
+                # QR码现在通过按钮点击生成，不再自动生成
 
         except ConnectionRefusedError:
             self.status_label.setText("无法连接到服务器：服务器未启动")
@@ -643,7 +816,6 @@ class ChatClient(QMainWindow):
                             <div style="text-align: right; margin-bottom: 6px; font-size: 21px; color: #000000; margin-right: 12px; font-weight: 500;">我</div>
                             <div style="position: relative; background-color: #E3F2FD;
                                        color: #000000; padding: 21px 27px; border-radius: 30px 30px 6px 30px;
-                                       word-wrap: break-word;
                                        font-size: 24px; line-height: 1.5; max-width: 100%;
                                        border: 1px solid #BBDEFB;">
                                 {message}
@@ -664,7 +836,6 @@ class ChatClient(QMainWindow):
                             <div style="text-align: left; margin-bottom: 6px; font-size: 21px; color: #000000; margin-left: 12px; font-weight: 500;">{sender}</div>
                             <div style="position: relative; background-color: #F9FAFB;
                                        color: #000000; padding: 21px 27px; border-radius: 30px 30px 30px 6px;
-                                       word-wrap: break-word;
                                        font-size: 24px; line-height: 1.5; max-width: 100%;
                                        border: 1px solid #E5E7EB;">
                                 {msg_content}
@@ -1021,6 +1192,178 @@ class ChatClient(QMainWindow):
         self.connect_frame.show()
         # 重置窗口标题
         self.setWindowTitle("LittleChat -MVP")
+        
+        # QR码显示已移至对话框，无需重置
+    
+    def get_hitokoto(self):
+        """从uapis.cn/api/v1/saying获取一言内容"""
+        try:
+            # 发送请求获取一言
+            url = "https://uapis.cn/api/v1/saying"
+            response = requests.get(url, timeout=5)
+            response.raise_for_status()
+            
+            # 解析JSON响应
+            data = response.json()
+            if isinstance(data, dict) and "text" in data:
+                hitokoto_text = data["text"]
+                # 更新标签文本
+                self.hitokoto_label.setText(f"{hitokoto_text}")
+            else:
+                # 响应格式不符合预期
+                self.hitokoto_label.setText("一言加载失败")
+        except requests.exceptions.RequestException as e:
+            # 网络请求错误
+            self.hitokoto_label.setText("一言加载失败")
+        except Exception as e:
+            # 其他错误
+            self.hitokoto_label.setText("一言加载失败")
+    
+    def get_user_ip(self):
+        """从uapis.cn/api/v1/network/myip获取用户IP地址"""
+        try:
+            # 发送请求获取用户IP信息
+            url = "https://uapis.cn/api/v1/network/myip"
+            response = requests.get(url, timeout=5)
+            response.raise_for_status()
+            
+            # 解析JSON响应
+            self.userip = response.json()
+            return self.userip
+        except requests.exceptions.RequestException as e:
+            # 网络请求错误
+            print(f"获取IP地址失败: {str(e)}")
+            self.userip = {"ip": "127.0.0.1"}  # 默认值
+            return self.userip
+        except Exception as e:
+            # 其他错误
+            print(f"解析IP地址失败: {str(e)}")
+            self.userip = {"ip": "127.0.0.1"}  # 默认值
+            return self.userip
+    
+    def generate_qrcode(self):
+        """生成QR码，返回QPixmap对象"""
+        try:
+            # 获取用户IP地址
+            user_ip_data = self.get_user_ip()
+            
+            # 将完整的user_ip_data转换为字符串填入text字段
+            import json
+            user_ip_str = json.dumps(user_ip_data, ensure_ascii=False)
+            
+            # 生成QR码的API请求，使用较大的size参数
+            qrcode_url = "https://uapis.cn/api/v1/image/qrcode"
+            params = {
+                "text": user_ip_str,
+                "size": 512,  # 使用较大尺寸，提高清晰度
+                "format": "image"
+            }
+            
+            # 发送请求获取QR码图片
+            response = requests.get(qrcode_url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            # 将响应内容转换为QPixmap
+            pixmap = QPixmap()
+            pixmap.loadFromData(response.content)
+            
+            return pixmap
+        except requests.exceptions.RequestException as e:
+            # 网络请求错误
+            print(f"生成QR码失败: {str(e)}")
+            return None
+        except Exception as e:
+            # 其他错误
+            print(f"显示QR码失败: {str(e)}")
+            return None
+    
+    def show_qrcode_dialog(self):
+        """显示大尺寸QR码对话框"""
+        # 生成QR码
+        pixmap = self.generate_qrcode()
+        
+        if pixmap:
+            # 创建对话框
+            from PyQt5.QtWidgets import QDialog
+            dialog = QDialog()
+            dialog.setWindowTitle("我的IP二维码")
+            dialog.setMinimumSize(500, 500)
+            dialog.setStyleSheet("background-color: white;")
+            
+            # 创建布局
+            layout = QVBoxLayout(dialog)
+            
+            # 添加标题
+            title_label = QLabel("我的IP地址二维码")
+            title_label.setAlignment(Qt.AlignCenter)
+            title_label.setStyleSheet("""
+                QLabel {
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #333;
+                    font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                    margin: 20px 0;
+                }
+            """)
+            layout.addWidget(title_label)
+            
+            # 添加QR码图片
+            qrcode_label = QLabel()
+            qrcode_label.setAlignment(Qt.AlignCenter)
+            qrcode_label.setPixmap(pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            qrcode_label.setStyleSheet("""
+                QLabel {
+                    background-color: white;
+                    border: 2px solid #E0E0E0;
+                    border-radius: 10px;
+                    padding: 20px;
+                }
+            """)
+            layout.addWidget(qrcode_label)
+            
+            # 添加IP地址信息
+            import json
+            user_ip_str = json.dumps(self.userip, ensure_ascii=False, indent=2)
+            ip_info_label = QLabel(f"IP信息: {user_ip_str}")
+            ip_info_label.setAlignment(Qt.AlignCenter)
+            ip_info_label.setWordWrap(True)  # 使用Qt的word-wrap属性
+            ip_info_label.setStyleSheet("""
+                QLabel {
+                    font-size: 16px;
+                    color: #555;
+                    font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                    margin: 20px 0;
+                }
+            """)
+            layout.addWidget(ip_info_label)
+            
+            # 添加关闭按钮
+            close_button = QPushButton("关闭")
+            close_button.setObjectName("closeButton")
+            close_button.clicked.connect(dialog.close)
+            close_button.setStyleSheet("""
+                QPushButton#closeButton {
+                    background-color: #2196F3;
+                    color: white;
+                    border: none;
+                    border-radius: 12px;
+                    padding: 12px 40px;
+                    font-size: 18px;
+                    font-weight: bold;
+                    font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                    margin: 10px 0 20px 0;
+                }
+                QPushButton#closeButton:hover {
+                    background-color: #1976D2;
+                }
+            """)
+            layout.addWidget(close_button, alignment=Qt.AlignCenter)
+            
+            # 显示对话框
+            dialog.exec_()
+        else:
+            # 生成失败，显示错误提示
+            QMessageBox.warning(self, "QR码生成失败", "无法生成QR码，请检查网络连接后重试")
     
     def check_for_updates(self):
         """检查Gitee仓库是否有新的发行版"""
@@ -1217,6 +1560,17 @@ class ChatClient(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = ChatClient()
-    window.show()
+    
+    # 创建并显示法律声明窗口
+    license_window = LicenseWindow()
+    
+    # 创建主窗口实例但不显示
+    main_window = ChatClient()
+    
+    # 连接同意信号到显示主窗口的槽函数
+    license_window.agreed.connect(main_window.show)
+    
+    # 显示法律声明窗口
+    license_window.show()
+    
     sys.exit(app.exec_())
