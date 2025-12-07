@@ -1,10 +1,402 @@
 import socket
 import threading
 import time
+import os
+import requests
+
+# 版本信息
+CURRENT_VERSION = "2.4.0"
+
+# Gitee配置
+GITEE_OWNER = "MVPS680"
+GITEE_REPO = "MVPLittlechat"
+GITEE_TOKEN = "f19052b74c6322d54137ff8caa114093"
+
+def compare_versions(current_ver, latest_ver):
+    """比较版本号，返回版本差异信息
+    返回值：
+    - -1: 当前版本高于最新版本
+    - 0: 当前版本等于最新版本
+    - 1: 当前版本低于最新版本一个版本
+    - 2: 当前版本低于最新版本两个或更多版本，或主版本号落后
+    """
+    try:
+        # 解析版本号为列表
+        current = list(map(int, current_ver.split(".")))
+        latest = list(map(int, latest_ver.split(".")))
+        
+        # 确保版本号列表长度相同，不足的补0
+        max_len = max(len(current), len(latest))
+        current = current + [0] * (max_len - len(current))
+        latest = latest + [0] * (max_len - len(latest))
+        
+        # 比较每个部分
+        for i in range(max_len):
+            if current[i] < latest[i]:
+                # 当前版本低于最新版本，计算差异
+                if i == 0:  # 主版本号差异
+                    # 只要主版本号落后任意个版本，就强制更新
+                    return 2  # 主版本号差异，强制更新
+                elif i == 1:  # 次版本号差异
+                    if latest[i] - current[i] >= 2:
+                        return 2  # 次版本号差异2个或以上，强制更新
+                    elif latest[i] - current[i] >= 1:
+                        return 1  # 次版本号差异1个，可选更新
+                else:  # 修订号差异
+                    return 1  # 修订号差异，可选更新
+            elif current[i] > latest[i]:
+                return -1  # 当前版本高于最新版本
+        
+        return 0  # 版本相同
+    except Exception:
+        # 版本号格式错误，默认不需要更新
+        return 0
+
+def download_latest_release(download_url, latest_version, file_name=None):
+    """下载最新版本"""
+    try:
+        # 设置请求头，包含Token认证
+        headers = {
+            "Authorization": f"token {GITEE_TOKEN}"
+        }
+        
+        # 获取文件大小
+        response = requests.get(download_url, headers=headers, stream=True, timeout=10)
+        response.raise_for_status()
+        
+        total_size = int(response.headers.get("content-length", 0))
+        
+        # 如果没有提供文件名，生成默认文件名
+        if not file_name:
+            file_name = f"{GITEE_REPO}_server_v{latest_version}.zip"
+        
+        # 开始下载
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 开始下载更新: {file_name}")
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 文件大小: {total_size / 1024:.2f} KB")
+        
+        downloaded_size = 0
+        with open(file_name, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    downloaded_size += len(chunk)
+                    
+                    # 显示下载进度
+                    if total_size > 0:
+                        progress = (downloaded_size / total_size) * 100
+                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 下载进度: {progress:.1f}% ({downloaded_size / 1024:.2f} KB / {total_size / 1024:.2f} KB)", end="\r")
+        
+        print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 下载完成: {file_name}")
+        
+    except requests.exceptions.RequestException as e:
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 下载失败: 网络请求错误 - {str(e)}")
+    except Exception as e:
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 下载失败: {str(e)}")
+
+def check_for_updates():
+    """检查Gitee仓库是否有新的发行版"""
+    try:
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 🔍 正在检查更新...")
+        
+        # 构建API请求URL
+        url = f"https://gitee.com/api/v5/repos/{GITEE_OWNER}/{GITEE_REPO}/releases/latest"
+        
+        # 设置请求头，包含Token认证
+        headers = {
+            "Authorization": f"token {GITEE_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        # 发送请求
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        # 解析响应
+        latest_release = response.json()
+        latest_version = latest_release.get("tag_name", "").lstrip("v")
+        
+        # 获取assets
+        assets = latest_release.get("assets", [])
+        release_notes = latest_release.get("body", "")
+        
+        # 比较版本
+        version_diff = compare_versions(CURRENT_VERSION, latest_version)
+        if version_diff == 2:
+            # 当前版本落后最新版本两个或更多版本，强制更新
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ⚠️  您的版本已落后最新版本两个或更多版本，为了保证正常使用，请立即更新！")
+            print(f"当前版本：{CURRENT_VERSION}")
+            print(f"最新版本：{latest_version}")
+            print(f"\n更新日志：")
+            print(release_notes)
+            
+            # 强制更新询问用户
+            choice = input("是否立即下载更新？(y/n): ").strip().lower()
+            if choice == 'y':
+                # 查找zip文件附件
+                zip_assets = [asset for asset in assets if asset.get("name", "").lower().endswith(".zip")]
+                
+                # 查找带有server字段的py文件
+                server_py_assets = []
+                for asset in assets:
+                    asset_name = asset.get("name", "").lower()
+                    if "server" in asset_name and asset_name.endswith(".py"):
+                        server_py_assets.append(asset)
+                
+                if not zip_assets and not server_py_assets:
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 未找到可下载的更新文件！")
+                    return
+                
+                # 让用户选择下载类型
+                print("\n可下载的更新文件：")
+                option_count = 1
+                if zip_assets:
+                    print(f"{option_count}. 完整更新包 - {zip_assets[0].get('name')}")
+                    option_count += 1
+                if server_py_assets:
+                    print(f"{option_count}. 服务器Python文件 - {server_py_assets[0].get('name')}")
+                
+                # 设置默认选项为1（完整更新包）
+                download_choice = input("请选择下载类型 (1-完整更新包, 2-服务器Python文件, 直接回车默认完整更新包): ").strip()
+                
+                # 默认选择完整更新包
+                if download_choice == "" or download_choice == "1":
+                    if zip_assets:
+                        download_url = zip_assets[0].get("browser_download_url", "")
+                        file_name = zip_assets[0].get("name", f"{GITEE_REPO}_v{latest_version}.zip")
+                    else:
+                        # 如果没有zip文件，退而求其次选择服务器Python文件
+                        if server_py_assets:
+                            download_url = server_py_assets[0].get("browser_download_url", "")
+                            file_name = server_py_assets[0].get("name", f"{GITEE_REPO}_server_v{latest_version}.py")
+                        else:
+                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 未找到可下载的更新文件！")
+                            return
+                elif download_choice == "2":
+                    if server_py_assets:
+                        download_url = server_py_assets[0].get("browser_download_url", "")
+                        file_name = server_py_assets[0].get("name", f"{GITEE_REPO}_server_v{latest_version}.py")
+                    else:
+                        # 如果没有服务器Python文件，退而求其次选择完整更新包
+                        if zip_assets:
+                            download_url = zip_assets[0].get("browser_download_url", "")
+                            file_name = zip_assets[0].get("name", f"{GITEE_REPO}_v{latest_version}.zip")
+                        else:
+                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 未找到可下载的更新文件！")
+                            return
+                else:
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ⚠️  无效选择，默认下载完整更新包")
+                    if zip_assets:
+                        download_url = zip_assets[0].get("browser_download_url", "")
+                        file_name = zip_assets[0].get("name", f"{GITEE_REPO}_v{latest_version}.zip")
+                    elif server_py_assets:
+                        download_url = server_py_assets[0].get("browser_download_url", "")
+                        file_name = server_py_assets[0].get("name", f"{GITEE_REPO}_server_v{latest_version}.py")
+                    else:
+                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 未找到可下载的更新文件！")
+                        return
+                
+                # 确保URL格式正确
+                if download_url and not (download_url.startswith("http://") or download_url.startswith("https://")):
+                    download_url = f"https://gitee.com{download_url}"
+                
+                if download_url:
+                    download_latest_release(download_url, latest_version, file_name)
+                else:
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 获取下载链接失败！")
+        elif version_diff == 1:
+            # 当前版本落后最新版本一个版本，可选更新
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 🎉 发现新版本！")
+            print(f"当前版本：{CURRENT_VERSION}")
+            print(f"最新版本：{latest_version}")
+            print(f"\n更新日志：")
+            print(release_notes)
+            
+            # 询问用户是否更新
+            choice = input("是否下载更新？(y/n): ").strip().lower()
+            if choice == 'y':
+                # 查找zip文件附件
+                zip_assets = [asset for asset in assets if asset.get("name", "").lower().endswith(".zip")]
+                
+                # 查找带有server字段的py文件
+                server_py_assets = []
+                for asset in assets:
+                    asset_name = asset.get("name", "").lower()
+                    if "server" in asset_name and asset_name.endswith(".py"):
+                        server_py_assets.append(asset)
+                
+                if not zip_assets and not server_py_assets:
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 未找到可下载的更新文件！")
+                    return
+                
+                # 让用户选择下载类型
+                print("\n可下载的更新文件：")
+                option_count = 1
+                if zip_assets:
+                    print(f"{option_count}. 完整更新包 - {zip_assets[0].get('name')}")
+                    option_count += 1
+                if server_py_assets:
+                    print(f"{option_count}. 服务器Python文件 - {server_py_assets[0].get('name')}")
+                
+                # 设置默认选项为1（完整更新包）
+                download_choice = input("请选择下载类型 (1-完整更新包, 2-服务器Python文件, 直接回车默认完整更新包): ").strip()
+                
+                # 默认选择完整更新包
+                if download_choice == "" or download_choice == "1":
+                    if zip_assets:
+                        download_url = zip_assets[0].get("browser_download_url", "")
+                        file_name = zip_assets[0].get("name", f"{GITEE_REPO}_v{latest_version}.zip")
+                    else:
+                        # 如果没有zip文件，退而求其次选择服务器Python文件
+                        if server_py_assets:
+                            download_url = server_py_assets[0].get("browser_download_url", "")
+                            file_name = server_py_assets[0].get("name", f"{GITEE_REPO}_server_v{latest_version}.py")
+                        else:
+                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 未找到可下载的更新文件！")
+                            return
+                elif download_choice == "2":
+                    if server_py_assets:
+                        download_url = server_py_assets[0].get("browser_download_url", "")
+                        file_name = server_py_assets[0].get("name", f"{GITEE_REPO}_server_v{latest_version}.py")
+                    else:
+                        # 如果没有服务器Python文件，退而求其次选择完整更新包
+                        if zip_assets:
+                            download_url = zip_assets[0].get("browser_download_url", "")
+                            file_name = zip_assets[0].get("name", f"{GITEE_REPO}_v{latest_version}.zip")
+                        else:
+                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 未找到可下载的更新文件！")
+                            return
+                else:
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ⚠️  无效选择，默认下载完整更新包")
+                    if zip_assets:
+                        download_url = zip_assets[0].get("browser_download_url", "")
+                        file_name = zip_assets[0].get("name", f"{GITEE_REPO}_v{latest_version}.zip")
+                    elif server_py_assets:
+                        download_url = server_py_assets[0].get("browser_download_url", "")
+                        file_name = server_py_assets[0].get("name", f"{GITEE_REPO}_server_v{latest_version}.py")
+                    else:
+                        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 未找到可下载的更新文件！")
+                        return
+                
+                # 确保URL格式正确
+                if download_url and not (download_url.startswith("http://") or download_url.startswith("https://")):
+                    download_url = f"https://gitee.com{download_url}"
+                
+                if download_url:
+                    download_latest_release(download_url, latest_version, file_name)
+                else:
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 获取下载链接失败！")
+        elif version_diff == 0:
+            # 当前版本等于最新版本
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 当前已是最新版本！")
+            print(f"当前版本：{CURRENT_VERSION}")
+        else:
+            # 当前版本高于最新版本
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 当前版本已高于最新发布版本！")
+            print(f"当前版本：{CURRENT_VERSION}")
+            
+    except requests.exceptions.RequestException as e:
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 检查更新失败：网络请求错误 - {str(e)}")
+    except Exception as e:
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ❌ 检查更新失败：{str(e)}")
+
+def load_config():
+    """加载配置文件，若不存在则生成默认配置"""
+    config_file = "LittleChat.serverset"
+    default_config = {
+        "server_port": "7891",
+        "max_user": "5",
+        "max_attempts": "5",
+        "wait_time": "1",
+        "socket_timeout": "1",
+        "admin_prefix": "ADMIN：",
+        "log_level": "info",
+        "message_size_limit": "1024"
+    }
+    
+    # 检查配置文件是否存在
+    if not os.path.exists(config_file):
+        # 生成默认配置文件
+        with open(config_file, "w", encoding="utf-8") as f:
+            f.write("# LittleChat服务器配置文件\n")
+            f.write("# 编辑此文件修改服务器设置\n")
+            f.write("# 支持完整注释行和行末注释\n\n")
+            
+            # 为每个配置项添加注释
+            for key, value in default_config.items():
+                if key == "server_port":
+                    f.write("# 服务器绑定的端口号\n")
+                    f.write(f"{key}={value} # 默认端口：7891\n\n")
+                elif key == "max_user":
+                    f.write("# 最大允许连接的用户数\n")
+                    f.write(f"{key}={value} # 默认最大用户数：5\n\n")
+                elif key == "max_attempts":
+                    f.write("# 端口绑定失败后的最大重试次数\n")
+                    f.write(f"{key}={value} # 默认重试次数：5\n\n")
+                elif key == "wait_time":
+                    f.write("# 端口绑定失败后重试的等待时间（秒）\n")
+                    f.write(f"{key}={value} # 默认等待时间：1秒\n\n")
+                elif key == "socket_timeout":
+                    f.write("# 服务器socket的超时时间（秒）\n")
+                    f.write(f"{key}={value} # 默认超时时间：1秒\n\n")
+                elif key == "admin_prefix":
+                    f.write("# 管理员昵称前缀\n")
+                    f.write(f"{key}={value} # 默认前缀：ADMIN：\n\n")
+                elif key == "log_level":
+                    f.write("# 日志级别（info/warn/error）\n")
+                    f.write(f"{key}={value} # 默认日志级别：info\n\n")
+                elif key == "message_size_limit":
+                    f.write("# 单个消息的最大长度（字节）\n")
+                    f.write(f"{key}={value} # 默认消息大小：1024字节\n\n")
+                else:
+                    f.write(f"# {key}配置\n")
+                    f.write(f"{key}={value}\n\n")
+        return default_config
+    
+    # 读取配置文件
+    config = {}
+    try:
+        with open(config_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                # 跳过空行
+                if not line:
+                    continue
+                # 跳过完整的注释行
+                if line.startswith("#"):
+                    continue
+                # 处理行末注释
+                if "#" in line:
+                    # 只保留#之前的部分
+                    line = line.split("#", 1)[0].strip()
+                # 解析键值对
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    config[key.strip()] = value.strip()
+    except Exception as e:
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 配置文件读取错误: {e}")
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 使用默认配置")
+        return default_config
+    
+    # 确保所有必要的配置项都存在
+    for key, value in default_config.items():
+        if key not in config:
+            config[key] = value
+    
+    return config
 
 class ChatServer:
-    def __init__(self, port=7891):
-        self.port = port
+    def __init__(self):
+        # 加载配置
+        config = load_config()
+        self.port = int(config["server_port"])
+        self.max_user = int(config["max_user"])
+        self.max_attempts = int(config["max_attempts"])
+        self.wait_time = int(config["wait_time"])
+        self.socket_timeout = int(config["socket_timeout"])
+        self.admin_prefix = config["admin_prefix"]
+        self.log_level = config["log_level"]
+        self.message_size_limit = int(config["message_size_limit"])
+        
         self.server_socket = None
         self.client_sockets = []
         self.client_nicknames = {}
@@ -100,7 +492,7 @@ class ChatServer:
             
             # 处理客户端消息
             while True:
-                message = client_socket.recv(1024).decode('utf-8')
+                message = client_socket.recv(self.message_size_limit).decode('utf-8')
                 if not message:
                     break
                 
@@ -467,8 +859,8 @@ class ChatServer:
             users = []
             for sock, nickname in self.client_nicknames.items():
                 if nickname in self.admins:
-                    # 管理员昵称前添加ADMIN：前缀
-                    users.append(f"ADMIN：{nickname}")
+                    # 管理员昵称前添加配置的前缀
+                    users.append(f"{self.admin_prefix}{nickname}")
                 else:
                     # 普通用户使用原昵称
                     users.append(nickname)
@@ -507,12 +899,14 @@ class ChatServer:
         print("=" * 60)
         print("" * 20 + "聊天服务器启动中...")
         print("=" * 60)
+        
+        # 检查更新
+        check_for_updates()
         try:
             bind_attempts = 0
-            max_attempts = 5
             bind_success = False
             
-            while bind_attempts < max_attempts and not bind_success:
+            while bind_attempts < self.max_attempts and not bind_success:
                 try:
                     # 创建套接字
                     self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -524,41 +918,41 @@ class ChatServer:
                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 已设置 SO_REUSEADDR 选项，允许端口复用")
                     
                     bind_attempts += 1
-                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 尝试绑定到端口 {self.port}... (尝试 {bind_attempts}/{max_attempts})")
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 尝试绑定到端口 {self.port}... (尝试 {bind_attempts}/{self.max_attempts})")
                     
                     # 绑定地址和端口
                     self.server_socket.bind(('0.0.0.0', self.port))
                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 成功绑定到端口 {self.port}")
                     
                     # 开始监听连接
-                    self.server_socket.listen(5)
+                    self.server_socket.listen(self.max_user)
                     self.running = True
                     self.start_time = time.time()  # 记录服务器启动时间
                     
                     # 服务器启动成功提示
                     print("=" * 60)
-                    print("" * 20 + "聊天服务器启动成功  作者：MVP请勿做商业用途或非法活动")
+                    print("" * 20 + f"聊天服务器启动成功 v{CURRENT_VERSION}  作者：MVP请勿做商业用途或非法活动")
                     print("=" * 60)
                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 服务器状态: 运行中")
                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 监听地址: 0.0.0.0")
                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 监听端口: {self.port}")
                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 服务器IP: {socket.gethostbyname(socket.gethostname())}")
-                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 最大连接数: 5")
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 最大连接数: {self.max_user}")
                     print("=" * 60)
                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 等待客户端连接...")
                     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 提示: 输入 'quit'、'exit' 或 'stop' 可关闭服务器")
-                    print("-" * 60)
+                    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 提示: 服务端目录下的LittleChat.serverset文件是服务器配置文件，试试改一改它吧！")
+                    print("=" * 60)
                     
                     bind_success = True
                 except OSError as e:
                     if hasattr(e, 'winerror') and e.winerror == 10048:
                         # Windows特定错误：地址已被占用
                         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 警告: 端口 {self.port} 被占用 - {e.strerror}")
-                        if bind_attempts < max_attempts:
+                        if bind_attempts < self.max_attempts:
                             # 等待一段时间后重试
-                            wait_time = 1  # 秒
-                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 等待 {wait_time} 秒后重试...")
-                            time.sleep(wait_time)
+                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 等待 {self.wait_time} 秒后重试...")
+                            time.sleep(self.wait_time)
                             # 关闭当前套接字，准备下一次尝试
                             try:
                                 self.server_socket.close()
@@ -566,7 +960,7 @@ class ChatServer:
                                 pass
                         else:
                             # 达到最大尝试次数，抛出异常
-                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 错误: 经过 {max_attempts} 次尝试后仍无法绑定到端口 {self.port}")
+                            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 错误: 经过 {self.max_attempts} 次尝试后仍无法绑定到端口 {self.port}")
                             raise
                     else:
                         # 其他OSError，直接抛出
@@ -590,6 +984,7 @@ class ChatServer:
                                 print("  quit, exit, stop  - 关闭服务器")
                                 print("  help, ?          - 显示帮助信息")
                                 print("  status           - 显示服务器状态")
+                                print("  version          - 显示当前版本号")
                                 print("  op <用户名>       - 将指定用户设置为管理员")
                                 print("  unop <用户名>     - 撤销指定用户的管理员权限")
                                 print("  kick <用户名>     - 踢出指定用户")
@@ -597,6 +992,10 @@ class ChatServer:
                                 print("  unban <用户名或IP>    - 解除指定IP的封禁")
                                 print("  shutup <用户名> <时间> - 禁言指定时长（分钟）")
                                 print("  unshutup <用户名> - 解除指定用户的禁言")
+                                print("-" * 60)
+                            elif command == 'version':
+                                print("-" * 60)
+                                print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 🔍 服务器版本: v{CURRENT_VERSION}")
                                 print("-" * 60)
                             elif command == 'status':
                                 print("-" * 60)
@@ -831,7 +1230,7 @@ class ChatServer:
                 while self.running:
                     try:
                         # 设置超时，定期检查running状态
-                        self.server_socket.settimeout(1)  # 1秒超时
+                        self.server_socket.settimeout(self.socket_timeout)  # 从配置文件读取超时时间
                         client_socket, client_address = self.server_socket.accept()
                         # 为每个客户端创建一个新线程
                         client_thread = threading.Thread(target=self.handle_client, args=(client_socket, client_address))
@@ -901,7 +1300,7 @@ class ChatServer:
 
 def start_server():
     """启动聊天服务器"""
-    server = ChatServer(port=7891)
+    server = ChatServer()
     server.start()
 
 
