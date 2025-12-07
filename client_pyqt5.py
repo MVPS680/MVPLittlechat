@@ -38,8 +38,9 @@ class ChatClient(QMainWindow):
         self.showing_reconnect_dialog = False  # 跟踪是否已经显示了重连对话框
         self.initUI()
         self.setup_signals()
-        # 启动时自动检查更新
-        self.check_for_updates()
+        # 连接服务器界面显示后2秒自动检查更新
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(1000, self.check_for_updates)
 
     def initUI(self):
         self.setWindowTitle(f"LittleChat v{CURRENT_VERSION} -MVP")
@@ -1064,11 +1065,19 @@ class ChatClient(QMainWindow):
                 return
             
             # 比较版本
-            if self.compare_versions(CURRENT_VERSION, latest_version):
-                # 有新版本
-                self.on_update_available(latest_version, download_url, release_notes)
-            else:
+            version_diff = self.compare_versions(CURRENT_VERSION, latest_version)
+            if version_diff == 2:
+                # 当前版本落后最新版本两个或更多版本，强制更新
+                self.on_update_available(latest_version, download_url, release_notes, is_force=True)
+            elif version_diff == 1:
+                # 当前版本落后最新版本一个版本，可选更新
+                self.on_update_available(latest_version, download_url, release_notes, is_force=False)
+            elif version_diff == 0:
+                # 当前版本等于最新版本
                 QMessageBox.information(self, "检查更新", f"程序版本：{CURRENT_VERSION} \n当前已是最新版本！")
+            else:
+                # 当前版本高于最新版本
+                QMessageBox.information(self, "检查更新", f"程序版本：{CURRENT_VERSION} \n当前版本已高于最新发布版本！")
                 
         except requests.exceptions.RequestException as e:
             QMessageBox.critical(self, "检查更新失败", f"网络请求错误：{str(e)}")
@@ -1076,44 +1085,75 @@ class ChatClient(QMainWindow):
             QMessageBox.critical(self, "检查更新失败", f"解析错误：{str(e)}")
     
     def compare_versions(self, current_ver, latest_ver):
-        """比较版本号，返回是否需要更新"""
+        """比较版本号，返回版本差异信息
+        返回值：
+        - -1: 当前版本高于最新版本
+        - 0: 当前版本等于最新版本
+        - 1: 当前版本低于最新版本一个版本
+        - 2: 当前版本低于最新版本两个或更多版本
+        """
         try:
             # 解析版本号为列表
             current = list(map(int, current_ver.split(".")))
             latest = list(map(int, latest_ver.split(".")))
             
-            # 比较每个部分
-            for i in range(max(len(current), len(latest))):
-                curr = current[i] if i < len(current) else 0
-                lat = latest[i] if i < len(latest) else 0
-                
-                if lat > curr:
-                    return True
-                elif lat < curr:
-                    return False
+            # 确保版本号列表长度相同，不足的补0
+            max_len = max(len(current), len(latest))
+            current = current + [0] * (max_len - len(current))
+            latest = latest + [0] * (max_len - len(latest))
             
-            return False
+            # 比较每个部分
+            for i in range(max_len):
+                if current[i] < latest[i]:
+                    # 当前版本低于最新版本，计算差异
+                    if i == 0:  # 主版本号差异
+                        if latest[i] - current[i] >= 1:
+                            return 2  # 主版本号差异，强制更新
+                    elif i == 1:  # 次版本号差异
+                        if latest[i] - current[i] >= 2:
+                            return 2  # 次版本号差异2个或以上，强制更新
+                        elif latest[i] - current[i] >= 1:
+                            return 1  # 次版本号差异1个，可选更新
+                    else:  # 修订号差异
+                        return 1  # 修订号差异，可选更新
+                elif current[i] > latest[i]:
+                    return -1  # 当前版本高于最新版本
+            
+            return 0  # 版本相同
         except Exception:
             # 版本号格式错误，默认不需要更新
-            return False
+            return 0
     
-    def on_update_available(self, latest_version, download_url, release_notes):
+    def on_update_available(self, latest_version, download_url, release_notes, is_force=False):
         """处理更新可用事件"""
         msg = QMessageBox()
-        msg.setWindowTitle("发现新版本")
-        msg.setText(f"当前版本：{CURRENT_VERSION}\n最新版本：{latest_version}\n\n更新日志：\n{release_notes}")
-        msg.setIcon(QMessageBox.Information)
-        
-        # 添加按钮
-        update_button = msg.addButton("立即更新", QMessageBox.AcceptRole)
-        later_button = msg.addButton("稍后更新", QMessageBox.RejectRole)
-        ignore_button = msg.addButton("忽略此版本", QMessageBox.ActionRole)
+        if is_force:
+            msg.setWindowTitle("强制更新通知")
+            msg.setText(f"当前版本：{CURRENT_VERSION}\n最新版本：{latest_version}\n\n⚠️ 您的版本已落后最新版本两个或更多版本，为了保证正常使用，请立即更新！\n\n更新日志：\n{release_notes}")
+            msg.setIcon(QMessageBox.Critical)
+            
+            # 强制更新只提供立即更新和退出程序按钮
+            update_button = msg.addButton("立即更新", QMessageBox.AcceptRole)
+            exit_button = msg.addButton("退出程序", QMessageBox.RejectRole)
+        else:
+            msg.setWindowTitle("发现新版本")
+            msg.setText(f"当前版本：{CURRENT_VERSION}\n最新版本：{latest_version}\n\n更新日志：\n{release_notes}")
+            msg.setIcon(QMessageBox.Information)
+            
+            # 可选更新提供完整按钮
+            update_button = msg.addButton("立即更新", QMessageBox.AcceptRole)
+            later_button = msg.addButton("稍后更新", QMessageBox.RejectRole)
+            ignore_button = msg.addButton("忽略此版本", QMessageBox.ActionRole)
         
         msg.exec_()
         
         if msg.clickedButton() == update_button:
             # 开始下载
             self.download_latest_release(download_url, latest_version)
+        elif is_force and msg.clickedButton() == exit_button:
+            # 强制更新时，如果用户选择退出程序，则关闭应用
+            QApplication.quit()
+        # 可选更新时，用户选择稍后更新或忽略，不做处理
     
     def download_latest_release(self, download_url, latest_version):
         """下载最新版本"""
