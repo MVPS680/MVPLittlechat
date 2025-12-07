@@ -12,7 +12,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread, pyqtSlot
 from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor
 
 # 应用版本信息
-CURRENT_VERSION = "2.3.0"
+CURRENT_VERSION = "2.3.1"
 # Gitee仓库信息
 GITEE_OWNER = "MVPS680"
 GITEE_REPO = "MVPLittlechat"
@@ -1090,7 +1090,7 @@ class ChatClient(QMainWindow):
         - -1: 当前版本高于最新版本
         - 0: 当前版本等于最新版本
         - 1: 当前版本低于最新版本一个版本
-        - 2: 当前版本低于最新版本两个或更多版本
+        - 2: 当前版本低于最新版本两个或更多版本，或主版本号落后
         """
         try:
             # 解析版本号为列表
@@ -1107,8 +1107,8 @@ class ChatClient(QMainWindow):
                 if current[i] < latest[i]:
                     # 当前版本低于最新版本，计算差异
                     if i == 0:  # 主版本号差异
-                        if latest[i] - current[i] >= 1:
-                            return 2  # 主版本号差异，强制更新
+                        # 只要主版本号落后任意个版本，就强制更新
+                        return 2  # 主版本号差异，强制更新
                     elif i == 1:  # 次版本号差异
                         if latest[i] - current[i] >= 2:
                             return 2  # 次版本号差异2个或以上，强制更新
