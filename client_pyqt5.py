@@ -9,10 +9,11 @@ from PyQt5.QtWidgets import (
     QListWidgetItem, QMenu, QAction, QMessageBox, QProgressDialog
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread, pyqtSlot, QTimer
-from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor, QPixmap
+from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor, QPixmap, QBrush
+from PyQt5.QtWidgets import QGraphicsBlurEffect
 
 # 应用版本信息
-CURRENT_VERSION = "2.4.0"
+CURRENT_VERSION = "3.0.0"
 # Gitee仓库信息
 GITEE_OWNER = "MVPS680"
 GITEE_REPO = "MVPLittlechat"
@@ -49,7 +50,7 @@ class LicenseWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("这是一份法律性声明")
-        self.setMinimumSize(600, 500)
+        self.setMinimumSize(800, 600)
         self.setWindowModality(Qt.ApplicationModal)  # 模态窗口
         
         # 创建布局
@@ -62,7 +63,7 @@ class LicenseWindow(QWidget):
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet("""
             QLabel {
-                font-size: 28px;
+                font-size: 24px;
                 font-weight: bold;
                 color: #333;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
@@ -80,10 +81,11 @@ class LicenseWindow(QWidget):
                 background-color: #F5F5F5;
                 border: 1px solid #E0E0E0;
                 border-radius: 8px;
-                padding: 15px;
-                font-size: 16px;
+                padding: 12px;
+                font-size: 14px;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
                 color: #333;
+                line-height: 1.5;
             }
         """)
         layout.addWidget(license_text)
@@ -94,7 +96,7 @@ class LicenseWindow(QWidget):
         self.agree_checkbox.setAlignment(Qt.AlignCenter)
         self.agree_checkbox.setStyleSheet("""
             QLabel {
-                font-size: 18px;
+                font-size: 16px;
                 color: #333;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
             }
@@ -114,20 +116,20 @@ class LicenseWindow(QWidget):
         self.confirm_button.setEnabled(False)  # 初始禁用
         self.confirm_button.setStyleSheet("""
             QPushButton#confirmButton {
-                background-color: #2196F3;
+                background-color: rgba(33, 150, 243, 0.8);
                 color: white;
                 border: none;
-                border-radius: 30px;
-                padding: 15px 45px;
-                font-size: 20px;
+                border-radius: 25px;
+                padding: 12px 40px;
+                font-size: 18px;
                 font-weight: bold;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
             }
             QPushButton#confirmButton:hover {
-                background-color: #1976D2;
+                background-color: rgba(25, 118, 210, 0.9);
             }
             QPushButton#confirmButton:disabled {
-                background-color: #BDBDBD;
+                background-color: rgba(189, 189, 189, 0.7);
             }
         """)
         layout.addWidget(self.confirm_button, alignment=Qt.AlignCenter)
@@ -178,34 +180,59 @@ class ChatClient(QMainWindow):
         # 主窗口加载后500ms自动检查更新
         QTimer.singleShot(500, self.check_for_updates)
 
+    def get_wallpaper(self):
+        """从https://t.alcy.cc/moe获取壁纸"""
+        try:
+            url = "https://t.alcy.cc/moe"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            return response.content
+        except Exception as e:
+            print(f"获取壁纸失败: {str(e)}")
+            return None
+
     def initUI(self):
         self.setWindowTitle(f"LittleChat v{CURRENT_VERSION} -MVP")
         # 放大窗口大小1.5倍
-        self.setGeometry(100, 100, 1200, 900)
-        self.setMinimumSize(900, 600)
+        self.setGeometry(100, 100, 1280, 720)
+        self.setMinimumSize(960, 540)
 
         # 主窗口部件
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
+        
+        # 设置窗口背景壁纸
+        self._wallpaper_data = self.get_wallpaper()
+        if self._wallpaper_data:
+            pixmap = QPixmap()
+            pixmap.loadFromData(self._wallpaper_data)
+            palette = self.palette()
+            brush = QBrush(pixmap.scaled(
+                self.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation
+            ))
+            palette.setBrush(self.backgroundRole(), brush)
+            self.setPalette(palette)
+            self.setAutoFillBackground(True)
 
         # 连接界面
         self.connect_frame = QFrame()
         self.connect_frame.setObjectName("connectFrame")
-        self.connect_frame.setStyleSheet("background-color: #F0F2F5;")
+        self.connect_frame.setStyleSheet("background-color: transparent;")
         connect_layout = QVBoxLayout(self.connect_frame)
         connect_layout.setAlignment(Qt.AlignCenter)
-        connect_layout.setContentsMargins(20, 20, 20, 20)
-        connect_layout.setSpacing(20)
+        connect_layout.setContentsMargins(10, 10, 10, 10)
+        connect_layout.setSpacing(15)
 
         # 标题
         title_label = QLabel("连接到聊天服务器")
         title_label.setStyleSheet("""
             QLabel {
-                font-size: 36px;
+                font-size: 32px;
                 font-weight: bold;
                 color: #333;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                margin-bottom: 20px;
             }
         """)
         connect_layout.addWidget(title_label)
@@ -214,27 +241,28 @@ class ChatClient(QMainWindow):
         form_container = QFrame()
         form_container.setObjectName("formContainer")
         form_container.setStyleSheet("""
-            QFrame#formContainer {
-                background-color: white;
-                border-radius: 15px;
-                border: 2px solid #E0E0E0;
-            }
-        """)
+QFrame#formContainer {
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    border: 2px solid rgba(224, 224, 224, 0.3);
+    padding: 15px;
+}
+""")
         form_layout = QVBoxLayout(form_container)
-        form_layout.setContentsMargins(30, 30, 30, 30)
+        form_layout.setContentsMargins(20, 20, 20, 20)
         form_layout.setSpacing(20)
 
         # IP地址输入
         ip_layout = QHBoxLayout()
-        ip_layout.setSpacing(10)
+        ip_layout.setSpacing(15)
         ip_label = QLabel("服务器IP地址:")
         ip_label.setStyleSheet("""
             QLabel {
-                font-size: 21px;
+                font-size: 18px;
                 font-weight: bold;
                 color: #555;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
-                min-width: 150px;
+                min-width: 120px;
                 text-align: right;
             }
         """)
@@ -242,15 +270,15 @@ class ChatClient(QMainWindow):
         self.ip_entry.setText("127.0.0.1")
         self.ip_entry.setStyleSheet("""
             QLineEdit {
-                background-color: #F5F5F5;
+                background-color: rgba(245, 245, 245, 0.3);
                 border: none;
-                border-radius: 12px;
-                padding: 15px 22px;
-                font-size: 21px;
+                border-radius: 10px;
+                padding: 12px 20px;
+                font-size: 18px;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
             }
             QLineEdit:focus {
-                background-color: white;
+                background-color: rgba(255, 255, 255, 0.4);
                 border: 1px solid #2196F3;
                 outline: none;
             }
@@ -261,15 +289,15 @@ class ChatClient(QMainWindow):
 
         # 端口输入
         port_layout = QHBoxLayout()
-        port_layout.setSpacing(10)
+        port_layout.setSpacing(15)
         port_label = QLabel("服务器端口:")
         port_label.setStyleSheet("""
             QLabel {
-                font-size: 21px;
+                font-size: 18px;
                 font-weight: bold;
                 color: #555;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
-                min-width: 150px;
+                min-width: 120px;
                 text-align: right;
             }
         """)
@@ -277,15 +305,15 @@ class ChatClient(QMainWindow):
         self.port_entry.setText("7891")
         self.port_entry.setStyleSheet("""
             QLineEdit {
-                background-color: #F5F5F5;
+                background-color: rgba(245, 245, 245, 0.3);
                 border: none;
-                border-radius: 12px;
-                padding: 15px 22px;
-                font-size: 21px;
+                border-radius: 10px;
+                padding: 12px 20px;
+                font-size: 18px;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
             }
             QLineEdit:focus {
-                background-color: white;
+                background-color: rgba(255, 255, 255, 0.4);
                 border: 1px solid #2196F3;
                 outline: none;
             }
@@ -296,30 +324,30 @@ class ChatClient(QMainWindow):
 
         # 昵称输入
         nick_layout = QHBoxLayout()
-        nick_layout.setSpacing(10)
+        nick_layout.setSpacing(15)
         nick_label = QLabel("您的昵称:")
         nick_label.setStyleSheet("""
             QLabel {
-                font-size: 21px;
+                font-size: 18px;
                 font-weight: bold;
                 color: #555;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
-                min-width: 150px;
+                min-width: 120px;
                 text-align: right;
             }
         """)
         self.nick_entry = QLineEdit()
         self.nick_entry.setStyleSheet("""
             QLineEdit {
-                background-color: #F5F5F5;
+                background-color: rgba(245, 245, 245, 0.3);
                 border: none;
-                border-radius: 12px;
-                padding: 15px 22px;
-                font-size: 21px;
+                border-radius: 10px;
+                padding: 12px 20px;
+                font-size: 18px;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
             }
             QLineEdit:focus {
-                background-color: white;
+                background-color: rgba(255, 255, 255, 0.4);
                 border: 1px solid #2196F3;
                 outline: none;
             }
@@ -333,16 +361,17 @@ class ChatClient(QMainWindow):
         self.status_label.setStyleSheet("""
             QLabel {
                 color: red;
-                font-size: 21px;
+                font-size: 16px;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
                 text-align: center;
+                margin-bottom: 10px;
             }
         """)
         form_layout.addWidget(self.status_label)
 
         # 按钮容器
         button_layout = QHBoxLayout()
-        button_layout.setSpacing(15)
+        button_layout.setSpacing(20)
         button_layout.setAlignment(Qt.AlignCenter)
 
         # 连接按钮
@@ -351,20 +380,20 @@ class ChatClient(QMainWindow):
         self.connect_button.clicked.connect(self.connect_to_server)
         self.connect_button.setStyleSheet("""
             QPushButton#connectButton {
-                background-color: #2196F3;
+                background-color: rgba(33, 150, 243, 0.8);
                 color: white;
                 border: none;
-                border-radius: 30px;
-                padding: 18px 45px;
-                font-size: 24px;
+                border-radius: 25px;
+                padding: 15px 40px;
+                font-size: 18px;
                 font-weight: bold;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
             }
             QPushButton#connectButton:hover {
-                background-color: #1976D2;
+                background-color: rgba(25, 118, 210, 0.9);
             }
             QPushButton#connectButton:pressed {
-                background-color: #1565C0;
+                background-color: rgba(21, 101, 192, 0.9);
             }
         """)
         button_layout.addWidget(self.connect_button)
@@ -375,17 +404,17 @@ class ChatClient(QMainWindow):
         self.check_update_button.clicked.connect(self.check_for_updates)
         self.check_update_button.setStyleSheet("""
             QPushButton#checkUpdateButton {
-                background-color: #4CAF50;
+                background-color: rgba(76, 175, 80, 0.8);
                 color: white;
                 border: none;
-                border-radius: 30px;
-                padding: 18px 45px;
-                font-size: 24px;
+                border-radius: 25px;
+                padding: 15px 40px;
+                font-size: 18px;
                 font-weight: bold;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
             }
             QPushButton#checkUpdateButton:hover {
-                background-color: #45a049;
+                background-color: rgba(69, 160, 73, 0.9);
             }
         """)
         button_layout.addWidget(self.check_update_button)
@@ -398,11 +427,11 @@ class ChatClient(QMainWindow):
         self.hitokoto_label.setStyleSheet("""
             QLabel {
                 color: #999;
-                font-size: 18px;
+                font-size: 16px;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
                 font-style: italic;
                 text-align: center;
-                margin: 20px 0;
+                margin: 15px 0;
             }
         """)
         self.hitokoto_label.setAlignment(Qt.AlignCenter)
@@ -410,7 +439,7 @@ class ChatClient(QMainWindow):
         
         # 作者信息
         self.author_label = QLabel("作者: MVP")
-        self.author_label.setStyleSheet("color: #666; font-size: 21px; font-family: 'Microsoft YaHei', SimSun, sans-serif;")
+        self.author_label.setStyleSheet("color: #666; font-size: 16px; font-family: 'Microsoft YaHei', SimSun, sans-serif;")
         self.author_label.setAlignment(Qt.AlignCenter)
         connect_layout.addWidget(self.author_label)
 
@@ -422,8 +451,8 @@ class ChatClient(QMainWindow):
 
         # 左侧聊天区域
         left_layout = QVBoxLayout()
-        left_layout.setContentsMargins(10, 10, 10, 10)
-        left_layout.setSpacing(10)
+        left_layout.setContentsMargins(8, 8, 8, 8)
+        left_layout.setSpacing(8)
 
         # 聊天记录 - 使用更现代化的设计
         self.chat_text = QTextEdit()
@@ -433,21 +462,21 @@ class ChatClient(QMainWindow):
         self.chat_text.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.chat_text.setStyleSheet("""
             QTextEdit#chatText {
-                background-color: #F5F5F5;
-                border: 1px solid #E0E0E0;
-                border-radius: 15px;
-                padding: 15px;
+                background-color: rgba(245, 245, 245, 0.3);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 12px;
+                padding: 12px;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
-                font-size: 21px;
+                font-size: 16px;
             }
             QTextEdit#chatText::scroll-bar:vertical {
-                width: 12px;
+                width: 10px;
                 background: transparent;
             }
             QTextEdit#chatText::handle:vertical {
                 background-color: rgba(0, 0, 0, 0.2);
-                border-radius: 6px;
-                min-height: 30px;
+                border-radius: 5px;
+                min-height: 25px;
             }
             QTextEdit#chatText::handle:vertical:hover {
                 background-color: rgba(0, 0, 0, 0.3);
@@ -460,13 +489,13 @@ class ChatClient(QMainWindow):
         input_container.setObjectName("inputContainer")
         input_container.setStyleSheet("""
             QFrame#inputContainer {
-                background-color: white;
-                border-radius: 10px;
-                border: 1px solid #E0E0E0;
+                background-color: rgba(255, 255, 255, 0.3);
+                border-radius: 8px;
+                border: 1px solid rgba(224, 224, 224, 0.3);
             }
         """)
         input_layout = QHBoxLayout(input_container)
-        input_layout.setContentsMargins(10, 10, 10, 10)
+        input_layout.setContentsMargins(8, 8, 8, 8)
         input_layout.setSpacing(10)
 
         self.message_entry = QLineEdit()
@@ -475,15 +504,15 @@ class ChatClient(QMainWindow):
         self.message_entry.returnPressed.connect(self.send_message)
         self.message_entry.setStyleSheet("""
             QLineEdit#messageEntry {
-                background-color: #F5F5F5;
+                background-color: rgba(245, 245, 245, 0.3);
                 border: none;
-                border-radius: 30px;
-                padding: 15px 22px;
-                font-size: 21px;
+                border-radius: 20px;
+                padding: 12px 20px;
+                font-size: 16px;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
             }
             QLineEdit#messageEntry:focus {
-                background-color: white;
+                background-color: rgba(255, 255, 255, 0.4);
                 border: 1px solid #2196F3;
                 outline: none;
             }
@@ -495,20 +524,20 @@ class ChatClient(QMainWindow):
         self.send_button.clicked.connect(self.send_message)
         self.send_button.setStyleSheet("""
             QPushButton#sendButton {
-                background-color: #2196F3;
+                background-color: rgba(33, 150, 243, 0.8);
                 color: white;
                 border: none;
-                border-radius: 30px;
-                padding: 15px 30px;
-                font-size: 21px;
+                border-radius: 20px;
+                padding: 12px 25px;
+                font-size: 16px;
                 font-weight: bold;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
             }
             QPushButton#sendButton:hover {
-                background-color: #1976D2;
+                background-color: rgba(25, 118, 210, 0.9);
             }
             QPushButton#sendButton:pressed {
-                background-color: #1565C0;
+                background-color: rgba(21, 101, 192, 0.9);
             }
         """)
         input_layout.addWidget(self.send_button)
@@ -517,17 +546,17 @@ class ChatClient(QMainWindow):
 
         # 右侧用户列表 - 现代化设计
         right_layout = QVBoxLayout()
-        right_layout.setContentsMargins(10, 10, 10, 10)
-        right_layout.setSpacing(10)
+        right_layout.setContentsMargins(8, 8, 8, 8)
+        right_layout.setSpacing(8)
         
         # 用户列表容器
         users_container = QFrame()
         users_container.setObjectName("usersContainer")
         users_container.setStyleSheet("""
             QFrame#usersContainer {
-                background-color: white;
-                border-radius: 10px;
-                border: 1px solid #E0E0E0;
+                background-color: rgba(255, 255, 255, 0.3);
+                border-radius: 8px;
+                border: 1px solid rgba(224, 224, 224, 0.3);
             }
         """)
         users_inner_layout = QVBoxLayout(users_container)
@@ -538,7 +567,7 @@ class ChatClient(QMainWindow):
         users_label.setAlignment(Qt.AlignCenter)
         users_label.setStyleSheet("""
             QLabel {
-                font-size: 24px;
+                font-size: 20px;
                 font-weight: bold;
                 color: #333;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
@@ -553,16 +582,16 @@ class ChatClient(QMainWindow):
         self.users_list.doubleClicked.connect(self.add_mention)
         self.users_list.setStyleSheet("""
             QListWidget#usersList {
-                background-color: #F5F5F5;
+                background-color: rgba(245, 245, 245, 0.3);
                 border: none;
-                border-radius: 12px;
+                border-radius: 10px;
                 padding: 8px;
-                font-size: 21px;
+                font-size: 16px;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
             }
             QListWidget#usersList::item {
-                padding: 12px 15px;
-                border-radius: 9px;
+                padding: 10px 12px;
+                border-radius: 8px;
                 margin-bottom: 5px;
             }
             QListWidget#usersList::item:hover {
@@ -581,16 +610,16 @@ class ChatClient(QMainWindow):
         self.check_update_button.clicked.connect(self.check_for_updates)
         self.check_update_button.setStyleSheet("""
             QPushButton#checkUpdateButton {
-                background-color: #4CAF50;
+                background-color: rgba(76, 175, 80, 0.8);
                 color: white;
                 border: none;
-                border-radius: 12px;
-                padding: 12px 22px;
-                font-size: 19px;
+                border-radius: 10px;
+                padding: 10px 20px;
+                font-size: 16px;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
             }
             QPushButton#checkUpdateButton:hover {
-                background-color: #45a049;
+                background-color: rgba(69, 160, 73, 0.9);
             }
         """)
         users_inner_layout.addWidget(self.check_update_button)
@@ -601,16 +630,16 @@ class ChatClient(QMainWindow):
         self.show_qrcode_button.clicked.connect(self.show_qrcode_dialog)
         self.show_qrcode_button.setStyleSheet("""
             QPushButton#showQrcodeButton {
-                background-color: #2196F3;
+                background-color: rgba(33, 150, 243, 0.8);
                 color: white;
                 border: none;
-                border-radius: 12px;
-                padding: 12px 22px;
+                border-radius: 10px;
+                padding: 10px 20px;
                 font-size: 16px;
                 font-family: 'Microsoft YaHei', SimSun, sans-serif;
             }
             QPushButton#showQrcodeButton:hover {
-                background-color: #1976D2;
+                background-color: rgba(25, 118, 210, 0.9);
             }
         """)
         users_inner_layout.addWidget(self.show_qrcode_button)
@@ -618,7 +647,7 @@ class ChatClient(QMainWindow):
         # 作者信息
         self.author_label_chat = QLabel("作者: MVP")
         self.author_label_chat.setAlignment(Qt.AlignCenter)
-        self.author_label_chat.setStyleSheet("color: #666; font-size: 18px; font-family: 'Microsoft YaHei', SimSun, sans-serif;")
+        self.author_label_chat.setStyleSheet("color: #666; font-size: 14px; font-family: 'Microsoft YaHei', SimSun, sans-serif;")
         users_inner_layout.addWidget(self.author_label_chat)
         
         right_layout.addWidget(users_container)
@@ -630,12 +659,12 @@ class ChatClient(QMainWindow):
         separator.setStyleSheet("background-color: #E0E0E0;")
 
         # 组装聊天界面
-        chat_layout.addLayout(left_layout, 3)
+        chat_layout.addLayout(left_layout, 5)
         chat_layout.addWidget(separator)
         chat_layout.addLayout(right_layout, 1)
         
         # 设置整体背景色
-        self.chat_frame.setStyleSheet("background-color: #F0F2F5;")
+        self.chat_frame.setStyleSheet("background-color: transparent;")
 
         # 初始显示连接界面
         main_layout.addWidget(self.connect_frame)
@@ -811,18 +840,18 @@ class ChatClient(QMainWindow):
         """添加气泡消息到聊天记录"""
         if is_self:
             # 自己发送的消息，右对齐气泡，浅蓝背景
-            html = f"""<div style="display: flex; justify-content: flex-end; margin: 18px 0;">
+            html = f"""<div style="display: flex; justify-content: flex-end; margin: 12px 0;">
                         <div style="max-width: 75%;">
-                            <div style="text-align: right; margin-bottom: 6px; font-size: 21px; color: #000000; margin-right: 12px; font-weight: 500;">我</div>
-                            <div style="position: relative; background-color: #E3F2FD;
-                                       color: #000000; padding: 21px 27px; border-radius: 30px 30px 6px 30px;
-                                       font-size: 24px; line-height: 1.5; max-width: 100%;
-                                       border: 1px solid #BBDEFB;">
+                            <div style="text-align: right; margin-bottom: 4px; font-size: 16px; color: #000000; margin-right: 10px; font-weight: 500;">我</div>
+                            <div style="position: relative; background-color: rgba(227, 242, 253, 0.4);
+                                       color: #000000; padding: 15px 20px; border-radius: 20px 20px 5px 20px;
+                                       font-size: 18px; line-height: 1.5; max-width: 100%;
+                                       border: 1px solid rgba(187, 222, 251, 0.4);">
                                 {message}
-                                <div style="position: absolute; bottom: 0; right: -12px; width: 0; height: 0;
-                                           border-top: 12px solid transparent;
-                                           border-bottom: 12px solid transparent;
-                                           border-left: 12px solid #E3F2FD;"></div>
+                                <div style="position: absolute; bottom: 0; right: -8px; width: 0; height: 0;
+                                           border-top: 8px solid transparent;
+                                           border-bottom: 8px solid transparent;
+                                           border-left: 8px solid rgba(227, 242, 253, 0.4);"></div>
                             </div>
                         </div>
                       </div>"""
@@ -831,27 +860,27 @@ class ChatClient(QMainWindow):
             sender, msg_content = message.split(":", 1)
             sender = sender.strip()
             msg_content = msg_content.strip()
-            html = f"""<div style="display: flex; justify-content: flex-start; margin: 18px 0;">
+            html = f"""<div style="display: flex; justify-content: flex-start; margin: 12px 0;">
                         <div style="max-width: 75%;">
-                            <div style="text-align: left; margin-bottom: 6px; font-size: 21px; color: #000000; margin-left: 12px; font-weight: 500;">{sender}</div>
-                            <div style="position: relative; background-color: #F9FAFB;
-                                       color: #000000; padding: 21px 27px; border-radius: 30px 30px 30px 6px;
-                                       font-size: 24px; line-height: 1.5; max-width: 100%;
-                                       border: 1px solid #E5E7EB;">
+                            <div style="text-align: left; margin-bottom: 4px; font-size: 16px; color: #000000; margin-left: 10px; font-weight: 500;">{sender}</div>
+                            <div style="position: relative; background-color: rgba(249, 250, 251, 0.4);
+                                       color: #000000; padding: 15px 20px; border-radius: 20px 20px 20px 5px;
+                                       font-size: 18px; line-height: 1.5; max-width: 100%;
+                                       border: 1px solid rgba(229, 231, 235, 0.4);">
                                 {msg_content}
-                                <div style="position: absolute; bottom: 0; left: -12px; width: 0; height: 0;
-                                           border-top: 12px solid transparent;
-                                           border-bottom: 12px solid transparent;
-                                           border-right: 12px solid #F9FAFB;"></div>
+                                <div style="position: absolute; bottom: 0; left: -8px; width: 0; height: 0;
+                                           border-top: 8px solid transparent;
+                                           border-bottom: 8px solid transparent;
+                                           border-right: 8px solid rgba(249, 250, 251, 0.4);"></div>
                             </div>
                         </div>
                       </div>"""
         else:
             # 系统消息，居中显示，浅色背景
-            html = f"""<div style="display: flex; justify-content: center; margin: 15px 0;">
-                        <div style="background-color: #F3F4F6; color: #000000; padding: 18px 30px; border-radius: 30px;
-                                   font-size: 21px; line-height: 1.5; font-weight: 500; max-width: 80%;
-                                   text-align: center; border: 1px solid #E5E7EB;">
+            html = f"""<div style="display: flex; justify-content: center; margin: 10px 0;">
+                        <div style="background-color: rgba(243, 244, 246, 0.4); color: #000000; padding: 12px 24px; border-radius: 20px;
+                                   font-size: 16px; line-height: 1.5; font-weight: 500; max-width: 80%;
+                                   text-align: center; border: 1px solid rgba(229, 231, 235, 0.4);">
                             {message}
                         </div>
                       </div>"""
@@ -1288,7 +1317,7 @@ class ChatClient(QMainWindow):
             dialog = QDialog()
             dialog.setWindowTitle("我的IP二维码")
             dialog.setMinimumSize(500, 500)
-            dialog.setStyleSheet("background-color: white;")
+            dialog.setStyleSheet("background-color: rgba(255, 255, 255, 0.8);")
             
             # 创建布局
             layout = QVBoxLayout(dialog)
@@ -1548,6 +1577,19 @@ class ChatClient(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "下载失败", f"下载错误：{str(e)}")
     
+    def resizeEvent(self, event):
+        # 窗口大小改变时重新调整壁纸
+        if hasattr(self, '_wallpaper_data') and self._wallpaper_data:
+            pixmap = QPixmap()
+            pixmap.loadFromData(self._wallpaper_data)
+            palette = self.palette()
+            brush = QBrush(pixmap.scaled(
+                self.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation
+            ))
+            palette.setBrush(self.backgroundRole(), brush)
+            self.setPalette(palette)
+        super().resizeEvent(event)
+
     def closeEvent(self, event):
         # 关闭窗口时断开连接
         if self.connected:
