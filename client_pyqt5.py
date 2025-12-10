@@ -13,7 +13,7 @@ from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor, QPixmap, QB
 from PyQt5.QtWidgets import QGraphicsBlurEffect
 
 # 应用版本信息
-CURRENT_VERSION = "3.0.0"
+CURRENT_VERSION = "3.1.0"
 # Gitee仓库信息
 GITEE_OWNER = "MVPS680"
 GITEE_REPO = "MVPLittlechat"
@@ -190,9 +190,53 @@ class ChatClient(QMainWindow):
         except Exception as e:
             print(f"获取壁纸失败: {str(e)}")
             return None
+    
+    def update_window_title(self):
+        """更新窗口标题，包含一言内容"""
+        current_title = self.windowTitle()
+        base_title = f"MVPLittleChat v{CURRENT_VERSION}"
+        user_info = ""
+        
+        # 检查是否包含当前用户信息
+        if "当前用户：" in current_title:
+            # 提取当前用户信息
+            if " - " in current_title:
+                user_part = current_title.split(" - ")[1]
+                if "当前用户：" in user_part:
+                    user_info = f" - {user_part}"
+            # 如果没有找到，尝试其他方式提取
+            elif "当前用户：" in current_title:
+                user_info = f" - {current_title.split('当前用户：')[1]}"
+        
+        # 构建新标题
+        if self.hitokoto_text and self.hitokoto_text != "一言加载失败":
+            new_title = f"{base_title} - {self.hitokoto_text}{user_info} Made by MVP"
+        else:
+            new_title = f"{base_title}{user_info} Made by MVP"
+        
+        self.setWindowTitle(new_title)
+    
+    def update_wallpaper(self):
+        """更新壁纸"""
+        self._wallpaper_data = self.get_wallpaper()
+        if self._wallpaper_data:
+            pixmap = QPixmap()
+            pixmap.loadFromData(self._wallpaper_data)
+            palette = self.palette()
+            brush = QBrush(pixmap.scaled(
+                self.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation
+            ))
+            palette.setBrush(self.backgroundRole(), brush)
+            self.setPalette(palette)
+            self.setAutoFillBackground(True)
+        else:
+            QMessageBox.warning(self, "壁纸更新失败", "无法获取新壁纸，请检查网络连接后重试")
 
     def initUI(self):
-        self.setWindowTitle(f"LittleChat v{CURRENT_VERSION} -MVP")
+        # 初始化一言文本
+        self.hitokoto_text = ""
+        # 设置初始窗口标题
+        self.setWindowTitle(f"MVPLittleChat v{CURRENT_VERSION} Made by MVP")
         # 放大窗口大小1.5倍
         self.setGeometry(100, 100, 1280, 720)
         self.setMinimumSize(960, 540)
@@ -666,6 +710,38 @@ QFrame#formContainer {
         # 设置整体背景色
         self.chat_frame.setStyleSheet("background-color: transparent;")
 
+        # 添加右下角换壁纸按钮
+        self.change_wallpaper_button = QPushButton("换壁纸")
+        self.change_wallpaper_button.setObjectName("changeWallpaperButton")
+        self.change_wallpaper_button.clicked.connect(self.update_wallpaper)
+        self.change_wallpaper_button.setStyleSheet("""
+            QPushButton#changeWallpaperButton {
+                background-color: rgba(156, 39, 176, 0.8);
+                color: white;
+                border: none;
+                border-radius: 20px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#changeWallpaperButton:hover {
+                background-color: rgba(136, 32, 155, 0.9);
+            }
+            QPushButton#changeWallpaperButton:pressed {
+                background-color: rgba(111, 27, 128, 0.9);
+            }
+        """)
+        
+        # 创建底部布局，用于放置换壁纸按钮
+        bottom_layout = QHBoxLayout()
+        bottom_layout.setContentsMargins(10, 10, 10, 10)
+        bottom_layout.addWidget(self.change_wallpaper_button)  # 左侧放置按钮
+        bottom_layout.addStretch()  # 右侧拉伸，将按钮固定在左下角
+        
+        # 将底部布局添加到主布局
+        main_layout.addLayout(bottom_layout)
+        
         # 初始显示连接界面
         main_layout.addWidget(self.connect_frame)
         # 确保聊天界面初始是隐藏的，并且没有被添加到布局中
@@ -724,8 +800,10 @@ QFrame#formContainer {
                 # 添加聊天界面
                 main_layout.addWidget(self.chat_frame)
                 self.chat_frame.show()
-                # 设置窗口标题
-                self.setWindowTitle(f"LittleChat v{CURRENT_VERSION} -MVP 当前用户：{self.nickname}")
+                # 先更新基础标题，然后调用update_window_title添加一言和制作者信息
+                self.setWindowTitle(f"MVPLittleChat v{CURRENT_VERSION} - 当前用户：{self.nickname}")
+                # 更新窗口标题，包含一言和制作者信息
+                self.update_window_title()
                 self.message_entry.setFocus()
 
                 # 启动接收消息线程
@@ -1220,7 +1298,9 @@ QFrame#formContainer {
         main_layout.addWidget(self.connect_frame)
         self.connect_frame.show()
         # 重置窗口标题
-        self.setWindowTitle("LittleChat -MVP")
+        self.setWindowTitle(f"MVPLittleChat v{CURRENT_VERSION} Made by MVP")
+        # 更新窗口标题，包含一言
+        self.update_window_title()
         
         # QR码显示已移至对话框，无需重置
     
@@ -1235,18 +1315,26 @@ QFrame#formContainer {
             # 解析JSON响应
             data = response.json()
             if isinstance(data, dict) and "text" in data:
-                hitokoto_text = data["text"]
+                self.hitokoto_text = data["text"]
                 # 更新标签文本
-                self.hitokoto_label.setText(f"{hitokoto_text}")
+                self.hitokoto_label.setText(f"{self.hitokoto_text}")
+                # 更新窗口标题
+                self.update_window_title()
             else:
                 # 响应格式不符合预期
-                self.hitokoto_label.setText("一言加载失败")
+                self.hitokoto_text = "一言加载失败"
+                self.hitokoto_label.setText(self.hitokoto_text)
+                self.update_window_title()
         except requests.exceptions.RequestException as e:
             # 网络请求错误
-            self.hitokoto_label.setText("一言加载失败")
+            self.hitokoto_text = "一言加载失败"
+            self.hitokoto_label.setText(self.hitokoto_text)
+            self.update_window_title()
         except Exception as e:
             # 其他错误
-            self.hitokoto_label.setText("一言加载失败")
+            self.hitokoto_text = "一言加载失败"
+            self.hitokoto_label.setText(self.hitokoto_text)
+            self.update_window_title()
     
     def get_user_ip(self):
         """从uapis.cn/api/v1/network/myip获取用户IP地址"""
@@ -1414,22 +1502,27 @@ QFrame#formContainer {
             latest_release = response.json()
             latest_version = latest_release.get("tag_name", "").lstrip("v")
             
-            # 获取下载链接，优先使用assets中的下载链接
+            # 获取下载链接，仅查找完整zip包
             download_url = ""
+            file_name = ""
             assets = latest_release.get("assets", [])
-            if assets:
-                # 优先使用第一个asset的浏览器下载链接
-                download_url = assets[0].get("browser_download_url", "")
+            release_notes = latest_release.get("body", "")
             
-            # 如果没有assets，使用zipball_url
-            if not download_url:
+            # 仅查找zip文件附件（完整包）
+            zip_assets = [asset for asset in assets if asset.get("name", "").lower().endswith(".zip")]
+            
+            if zip_assets:
+                # 使用zip文件
+                download_url = zip_assets[0].get("browser_download_url", "")
+                file_name = zip_assets[0].get("name", f"{GITEE_REPO}_v{latest_version}.zip")
+            else:
+                # 如果没有zip文件，使用zipball_url作为备选
                 download_url = latest_release.get("zipball_url", "")
-                
-            # 确保URL有协议前缀
+                file_name = f"{GITEE_REPO}_v{latest_version}.zip"
+            
+            # 确保URL格式正确
             if download_url and not (download_url.startswith("http://") or download_url.startswith("https://")):
                 download_url = f"https://gitee.com{download_url}"
-            
-            release_notes = latest_release.get("body", "")
             
             # 验证下载URL
             if not download_url:
@@ -1440,10 +1533,10 @@ QFrame#formContainer {
             version_diff = self.compare_versions(CURRENT_VERSION, latest_version)
             if version_diff == 2:
                 # 当前版本落后最新版本两个或更多版本，强制更新
-                self.on_update_available(latest_version, download_url, release_notes, is_force=True)
+                self.on_update_available(latest_version, download_url, release_notes, file_name, is_force=True)
             elif version_diff == 1:
                 # 当前版本落后最新版本一个版本，可选更新
-                self.on_update_available(latest_version, download_url, release_notes, is_force=False)
+                self.on_update_available(latest_version, download_url, release_notes, file_name, is_force=False)
             elif version_diff == 0:
                 # 当前版本等于最新版本
                 QMessageBox.information(self, "检查更新", f"程序版本：{CURRENT_VERSION} \n当前已是最新版本！")
@@ -1496,7 +1589,7 @@ QFrame#formContainer {
             # 版本号格式错误，默认不需要更新
             return 0
     
-    def on_update_available(self, latest_version, download_url, release_notes, is_force=False):
+    def on_update_available(self, latest_version, download_url, release_notes, file_name, is_force=False):
         """处理更新可用事件"""
         msg = QMessageBox()
         if is_force:
@@ -1520,35 +1613,35 @@ QFrame#formContainer {
         msg.exec_()
         
         if msg.clickedButton() == update_button:
-            # 开始下载
-            self.download_latest_release(download_url, latest_version)
+            # 开始下载，传递文件名
+            self.download_latest_release(download_url, latest_version, file_name)
         elif is_force and msg.clickedButton() == exit_button:
             # 强制更新时，如果用户选择退出程序，则关闭应用
             QApplication.quit()
         # 可选更新时，用户选择稍后更新或忽略，不做处理
     
-    def download_latest_release(self, download_url, latest_version):
-        """下载最新版本"""
+    def download_latest_release(self, download_url, latest_version, file_name):
+        """下载最新版本，参考服务端下载逻辑"""
         try:
             # 设置请求头，包含Token认证
             headers = {
-                "Authorization": f"token {GITEE_TOKEN}"
+                "Authorization": f"token {GITEE_TOKEN}",
+                "Accept": "*/*"  # 接受所有类型
             }
             
-            # 获取文件大小
-            response = requests.get(download_url, headers=headers, stream=True, timeout=10)
+            # 发送请求，获取响应头和文件大小
+            response = requests.get(download_url, headers=headers, stream=True, timeout=10, allow_redirects=True)
             response.raise_for_status()
             
+            # 获取文件大小
             total_size = int(response.headers.get("content-length", 0))
             
             # 创建进度对话框
             progress = QProgressDialog("正在下载更新...", "取消", 0, total_size, self)
             progress.setWindowTitle("下载更新")
             progress.setWindowModality(Qt.WindowModal)
+            progress.setMinimumDuration(0)  # 立即显示进度条
             progress.show()
-            
-            # 设置文件名
-            file_name = f"{GITEE_REPO}_v{latest_version}.zip"
             
             # 开始下载
             downloaded_size = 0
@@ -1558,24 +1651,56 @@ QFrame#formContainer {
                         f.write(chunk)
                         downloaded_size += len(chunk)
                         
-                        # 更新进度
+                        # 更新进度条
                         progress.setValue(downloaded_size)
+                        
+                        # 更新进度条文本，显示当前下载大小和总大小
+                        if total_size > 0:
+                            current_size = downloaded_size / (1024 * 1024)  # MB
+                            total_mb = total_size / (1024 * 1024)  # MB
+                            progress_text = f"正在下载更新... {current_size:.2f} MB / {total_mb:.2f} MB"
+                            progress.setLabelText(progress_text)
                         
                         # 检查是否取消
                         if progress.wasCanceled():
                             # 删除未完成的文件
                             import os
-                            os.remove(file_name)
+                            if os.path.exists(file_name):
+                                os.remove(file_name)
                             QMessageBox.information(self, "下载取消", "更新下载已取消")
                             return
             
             progress.close()
-            QMessageBox.information(self, "下载完成", f"最新版本已下载完成：{file_name}")
+            
+            # 验证下载的文件
+            import os
+            if os.path.exists(file_name):
+                file_size = os.path.getsize(file_name)
+                if file_size == 0:
+                    os.remove(file_name)
+                    QMessageBox.critical(self, "下载失败", "下载的文件为空，请重试")
+                    return
+                else:
+                    QMessageBox.information(self, "下载完成", f"最新版本已下载完成：{file_name}")
+                    # 打开文件所在目录
+                    file_dir = os.path.dirname(os.path.abspath(file_name))
+                    os.startfile(file_dir)
+            else:
+                QMessageBox.critical(self, "下载失败", "下载文件不存在，请重试")
+                return
             
         except requests.exceptions.RequestException as e:
             QMessageBox.critical(self, "下载失败", f"网络请求错误：{str(e)}")
+            # 清理可能的无效文件
+            import os
+            if os.path.exists(file_name):
+                os.remove(file_name)
         except Exception as e:
             QMessageBox.critical(self, "下载失败", f"下载错误：{str(e)}")
+            # 清理可能的无效文件
+            import os
+            if os.path.exists(file_name):
+                os.remove(file_name)
     
     def resizeEvent(self, event):
         # 窗口大小改变时重新调整壁纸

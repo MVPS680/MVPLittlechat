@@ -5,7 +5,7 @@ import os
 import requests
 
 # 版本信息
-CURRENT_VERSION = "3.0.0"
+CURRENT_VERSION = "3.1.0"
 
 # Gitee配置
 GITEE_OWNER = "MVPS680"
