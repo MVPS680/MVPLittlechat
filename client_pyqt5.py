@@ -4,20 +4,20 @@ import threading
 import time
 import requests
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QLineEdit, QPushButton, QTextEdit, QFrame, QListWidget,
-    QListWidgetItem, QMenu, QAction, QMessageBox, QProgressDialog
+    QListWidgetItem, QMenu, QAction, QMessageBox, QProgressDialog,
+    QTabWidget, QGroupBox, QComboBox, QDialog
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QObject, QThread, pyqtSlot, QTimer
 from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor, QPixmap, QBrush
 from PyQt5.QtWidgets import QGraphicsBlurEffect
 
 # 应用版本信息
-CURRENT_VERSION = "3.1.0"
+CURRENT_VERSION = "3.2.0"
 # Gitee仓库信息
 GITEE_OWNER = "MVPS680"
 GITEE_REPO = "MVPLittlechat"
-GITEE_TOKEN = "f19052b74c6322d54137ff8caa114093"
 
 # MIT许可证内容
 MIT_LICENSE = """MIT License 
@@ -158,6 +158,1085 @@ class Communicate(QObject):
     error_message = pyqtSignal(str)
     notification = pyqtSignal(str, str, str)  # 用于发送通知弹窗，参数：标题、内容、类型
     show_reconnect_dialog_signal = pyqtSignal()  # 用于触发重连对话框的显示
+
+class ToolboxDialog(QDialog):
+    """工具箱对话框"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("工具箱")
+        self.setGeometry(100, 100, 800, 600)
+        self.setMinimumSize(600, 500)
+        
+        # 设置窗口样式，与主界面风格一致
+        self.setStyleSheet("""
+            QDialog {
+                background-color: rgba(255, 255, 255, 0.3);
+                border-radius: 12px;
+                border: 2px solid rgba(224, 224, 224, 0.3);
+            }
+        """)
+        
+        # 创建主布局
+        main_layout = QVBoxLayout(self)
+        
+        # 创建标签页控件
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                background-color: rgba(255, 255, 255, 0.3);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 8px;
+                margin: 5px;
+            }
+            QTabBar::tab {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px 8px 0 0;
+                padding: 10px 20px;
+                margin-right: 2px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+            QTabBar::tab:selected {
+                background-color: rgba(255, 255, 255, 0.8);
+                border-color: rgba(224, 224, 224, 0.8);
+                color: #2196F3;
+            }
+            QTabBar::tab:hover {
+                background-color: rgba(255, 255, 255, 0.6);
+            }
+        """)
+        
+        # 添加各个工具标签页
+        self.init_base64_tab()
+        self.init_aes_tab()
+        self.init_md5_tab()
+        self.init_power_tab()
+        self.init_root_tab()
+        
+        # 将标签页控件添加到主布局
+        main_layout.addWidget(self.tab_widget)
+        
+        # 实现平滑的显示/隐藏动画
+        self.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowModality(Qt.ApplicationModal)
+    
+    def init_base64_tab(self):
+        """初始化Base64编解码标签页"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # 文本输入区域
+        input_group = QGroupBox("输入文本")
+        input_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+        """)
+        input_layout = QVBoxLayout(input_group)
+        self.base64_input = QTextEdit()
+        self.base64_input.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+        """)
+        input_layout.addWidget(self.base64_input)
+        layout.addWidget(input_group)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        self.base64_encode_btn = QPushButton("Base64编码")
+        self.base64_encode_btn.setObjectName("base64EncodeBtn")
+        self.base64_encode_btn.setStyleSheet("""
+            QPushButton#base64EncodeBtn {
+                background-color: rgba(33, 150, 243, 0.8);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#base64EncodeBtn:hover {
+                background-color: rgba(25, 118, 210, 0.9);
+            }
+        """)
+        self.base64_encode_btn.clicked.connect(self.base64_encode)
+        button_layout.addWidget(self.base64_encode_btn)
+        
+        self.base64_decode_btn = QPushButton("Base64解码")
+        self.base64_decode_btn.setObjectName("base64DecodeBtn")
+        self.base64_decode_btn.setStyleSheet("""
+            QPushButton#base64DecodeBtn {
+                background-color: rgba(76, 175, 80, 0.8);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#base64DecodeBtn:hover {
+                background-color: rgba(69, 160, 73, 0.9);
+            }
+        """)
+        self.base64_decode_btn.clicked.connect(self.base64_decode)
+        button_layout.addWidget(self.base64_decode_btn)
+        
+        self.base64_copy_btn = QPushButton("复制结果")
+        self.base64_copy_btn.setObjectName("base64CopyBtn")
+        self.base64_copy_btn.setStyleSheet("""
+            QPushButton#base64CopyBtn {
+                background-color: rgba(255, 193, 7, 0.8);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#base64CopyBtn:hover {
+                background-color: rgba(255, 160, 0, 0.9);
+            }
+        """)
+        self.base64_copy_btn.clicked.connect(self.base64_copy)
+        button_layout.addWidget(self.base64_copy_btn)
+        layout.addLayout(button_layout)
+        
+        # 结果显示区域
+        result_group = QGroupBox("结果")
+        result_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+        """)
+        result_layout = QVBoxLayout(result_group)
+        self.base64_result = QTextEdit()
+        self.base64_result.setReadOnly(True)
+        self.base64_result.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+        """)
+        result_layout.addWidget(self.base64_result)
+        layout.addWidget(result_group)
+        
+        self.tab_widget.addTab(tab, "Base64编解码")
+    
+    def init_aes_tab(self):
+        """初始化AES加密标签页"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # 密钥输入区域
+        key_group = QGroupBox("密钥设置")
+        key_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+        """)
+        key_layout = QGridLayout(key_group)
+        
+        # 密钥输入
+        key_label = QLabel("密钥：")
+        key_layout.addWidget(key_label, 0, 0)
+        self.aes_key = QLineEdit()
+        self.aes_key.setPlaceholderText("请输入16/24/32位密钥")
+        self.aes_key.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+        """)
+        key_layout.addWidget(self.aes_key, 0, 1)
+        
+        # 加密模式选择
+        mode_label = QLabel("加密模式：")
+        key_layout.addWidget(mode_label, 1, 0)
+        self.aes_mode = QComboBox()
+        self.aes_mode.addItems(["ECB", "CBC", "CFB", "OFB"])
+        self.aes_mode.setStyleSheet("""
+            QComboBox {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+        """)
+        key_layout.addWidget(self.aes_mode, 1, 1)
+        layout.addWidget(key_group)
+        
+        # 文本输入区域
+        input_group = QGroupBox("输入文本")
+        input_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+        """)
+        input_layout = QVBoxLayout(input_group)
+        self.aes_input = QTextEdit()
+        self.aes_input.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+        """)
+        input_layout.addWidget(self.aes_input)
+        layout.addWidget(input_group)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        self.aes_encrypt_btn = QPushButton("加密")
+        self.aes_encrypt_btn.setObjectName("aesEncryptBtn")
+        self.aes_encrypt_btn.setStyleSheet("""
+            QPushButton#aesEncryptBtn {
+                background-color: rgba(33, 150, 243, 0.8);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#aesEncryptBtn:hover {
+                background-color: rgba(25, 118, 210, 0.9);
+            }
+        """)
+        self.aes_encrypt_btn.clicked.connect(self.aes_encrypt)
+        button_layout.addWidget(self.aes_encrypt_btn)
+        
+        self.aes_decrypt_btn = QPushButton("解密")
+        self.aes_decrypt_btn.setObjectName("aesDecryptBtn")
+        self.aes_decrypt_btn.setStyleSheet("""
+            QPushButton#aesDecryptBtn {
+                background-color: rgba(76, 175, 80, 0.8);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#aesDecryptBtn:hover {
+                background-color: rgba(69, 160, 73, 0.9);
+            }
+        """)
+        self.aes_decrypt_btn.clicked.connect(self.aes_decrypt)
+        button_layout.addWidget(self.aes_decrypt_btn)
+        
+        self.aes_copy_btn = QPushButton("复制结果")
+        self.aes_copy_btn.setObjectName("aesCopyBtn")
+        self.aes_copy_btn.setStyleSheet("""
+            QPushButton#aesCopyBtn {
+                background-color: rgba(255, 193, 7, 0.8);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#aesCopyBtn:hover {
+                background-color: rgba(255, 160, 0, 0.9);
+            }
+        """)
+        self.aes_copy_btn.clicked.connect(self.aes_copy)
+        button_layout.addWidget(self.aes_copy_btn)
+        layout.addLayout(button_layout)
+        
+        # 结果显示区域
+        result_group = QGroupBox("结果")
+        result_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+        """)
+        result_layout = QVBoxLayout(result_group)
+        self.aes_result = QTextEdit()
+        self.aes_result.setReadOnly(True)
+        self.aes_result.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+        """)
+        result_layout.addWidget(self.aes_result)
+        layout.addWidget(result_group)
+        
+        self.tab_widget.addTab(tab, "AES加密")
+    
+    def init_md5_tab(self):
+        """初始化MD5校验标签页"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # 文件上传区域
+        file_group = QGroupBox("文件上传")
+        file_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+        """)
+        file_layout = QHBoxLayout(file_group)
+        self.md5_file_path = QLineEdit()
+        self.md5_file_path.setReadOnly(True)
+        self.md5_file_path.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+        """)
+        file_layout.addWidget(self.md5_file_path)
+        
+        self.md5_browse_btn = QPushButton("浏览文件")
+        self.md5_browse_btn.setObjectName("md5BrowseBtn")
+        self.md5_browse_btn.setStyleSheet("""
+            QPushButton#md5BrowseBtn {
+                background-color: rgba(33, 150, 243, 0.8);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#md5BrowseBtn:hover {
+                background-color: rgba(25, 118, 210, 0.9);
+            }
+        """)
+        self.md5_browse_btn.clicked.connect(self.md5_browse_file)
+        file_layout.addWidget(self.md5_browse_btn)
+        layout.addWidget(file_group)
+        
+        # 文本输入区域
+        text_group = QGroupBox("或输入文本")
+        text_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+        """)
+        text_layout = QVBoxLayout(text_group)
+        self.md5_text = QTextEdit()
+        self.md5_text.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+        """)
+        text_layout.addWidget(self.md5_text)
+        layout.addWidget(text_group)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        self.md5_calc_btn = QPushButton("计算MD5")
+        self.md5_calc_btn.setObjectName("md5CalcBtn")
+        self.md5_calc_btn.setStyleSheet("""
+            QPushButton#md5CalcBtn {
+                background-color: rgba(33, 150, 243, 0.8);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#md5CalcBtn:hover {
+                background-color: rgba(25, 118, 210, 0.9);
+            }
+        """)
+        self.md5_calc_btn.clicked.connect(self.md5_calculate)
+        button_layout.addWidget(self.md5_calc_btn)
+        
+        self.md5_copy_btn = QPushButton("复制结果")
+        self.md5_copy_btn.setObjectName("md5CopyBtn")
+        self.md5_copy_btn.setStyleSheet("""
+            QPushButton#md5CopyBtn {
+                background-color: rgba(255, 193, 7, 0.8);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#md5CopyBtn:hover {
+                background-color: rgba(255, 160, 0, 0.9);
+            }
+        """)
+        self.md5_copy_btn.clicked.connect(self.md5_copy)
+        button_layout.addWidget(self.md5_copy_btn)
+        layout.addLayout(button_layout)
+        
+        # 结果显示区域
+        result_group = QGroupBox("MD5哈希值")
+        result_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+        """)
+        result_layout = QVBoxLayout(result_group)
+        self.md5_result = QLineEdit()
+        self.md5_result.setReadOnly(True)
+        self.md5_result.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                font-weight: bold;
+                color: #2196F3;
+            }
+        """)
+        result_layout.addWidget(self.md5_result)
+        layout.addWidget(result_group)
+        
+        self.tab_widget.addTab(tab, "MD5校验")
+    
+    def init_power_tab(self):
+        """初始化幂计算器标签页"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # 输入区域
+        input_group = QGroupBox("输入")
+        input_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+        """)
+        input_layout = QGridLayout(input_group)
+        
+        # 底数输入
+        base_label = QLabel("底数 (x)：")
+        input_layout.addWidget(base_label, 0, 0)
+        self.power_base = QLineEdit()
+        self.power_base.setPlaceholderText("请输入底数")
+        self.power_base.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+        """)
+        input_layout.addWidget(self.power_base, 0, 1)
+        
+        # 指数输入
+        exponent_label = QLabel("指数 (y)：")
+        input_layout.addWidget(exponent_label, 1, 0)
+        self.power_exponent = QLineEdit()
+        self.power_exponent.setPlaceholderText("请输入指数")
+        self.power_exponent.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+        """)
+        input_layout.addWidget(self.power_exponent, 1, 1)
+        layout.addWidget(input_group)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        self.power_calc_btn = QPushButton("计算 x^y")
+        self.power_calc_btn.setObjectName("powerCalcBtn")
+        self.power_calc_btn.setStyleSheet("""
+            QPushButton#powerCalcBtn {
+                background-color: rgba(33, 150, 243, 0.8);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#powerCalcBtn:hover {
+                background-color: rgba(25, 118, 210, 0.9);
+            }
+        """)
+        self.power_calc_btn.clicked.connect(self.power_calculate)
+        button_layout.addWidget(self.power_calc_btn)
+        
+        self.power_copy_btn = QPushButton("复制结果")
+        self.power_copy_btn.setObjectName("powerCopyBtn")
+        self.power_copy_btn.setStyleSheet("""
+            QPushButton#powerCopyBtn {
+                background-color: rgba(255, 193, 7, 0.8);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#powerCopyBtn:hover {
+                background-color: rgba(255, 160, 0, 0.9);
+            }
+        """)
+        self.power_copy_btn.clicked.connect(self.power_copy)
+        button_layout.addWidget(self.power_copy_btn)
+        layout.addLayout(button_layout)
+        
+        # 结果显示区域
+        result_group = QGroupBox("结果")
+        result_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+        """)
+        result_layout = QVBoxLayout(result_group)
+        self.power_result = QLineEdit()
+        self.power_result.setReadOnly(True)
+        self.power_result.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 16px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                font-weight: bold;
+                color: #2196F3;
+            }
+        """)
+        result_layout.addWidget(self.power_result)
+        layout.addWidget(result_group)
+        
+        self.tab_widget.addTab(tab, "幂计算器")
+    
+    def init_root_tab(self):
+        """初始化求根计算器标签页"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # 输入区域
+        input_group = QGroupBox("输入")
+        input_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+        """)
+        input_layout = QGridLayout(input_group)
+        
+        # 被开方数输入
+        radicand_label = QLabel("被开方数 (x)：")
+        input_layout.addWidget(radicand_label, 0, 0)
+        self.root_radicand = QLineEdit()
+        self.root_radicand.setPlaceholderText("请输入被开方数")
+        self.root_radicand.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+        """)
+        input_layout.addWidget(self.root_radicand, 0, 1)
+        
+        # 根指数选择
+        index_label = QLabel("根指数 (n)：")
+        input_layout.addWidget(index_label, 1, 0)
+        root_index_layout = QHBoxLayout()
+        self.root_index = QComboBox()
+        self.root_index.addItems(["2 (平方根)", "3 (立方根)", "自定义"])
+        self.root_index.setStyleSheet("""
+            QComboBox {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+        """)
+        self.root_index.currentIndexChanged.connect(self.on_root_index_changed)
+        root_index_layout.addWidget(self.root_index)
+        
+        # 自定义根指数输入
+        self.custom_root_index = QLineEdit()
+        self.custom_root_index.setPlaceholderText("请输入根指数")
+        self.custom_root_index.setDisabled(True)
+        self.custom_root_index.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QLineEdit:disabled {
+                background-color: rgba(224, 224, 224, 0.3);
+                color: #999;
+            }
+        """)
+        root_index_layout.addWidget(self.custom_root_index)
+        input_layout.addLayout(root_index_layout, 1, 1)
+        layout.addWidget(input_group)
+        
+        # 按钮区域
+        button_layout = QHBoxLayout()
+        self.root_calc_btn = QPushButton("计算 n√x")
+        self.root_calc_btn.setObjectName("rootCalcBtn")
+        self.root_calc_btn.setStyleSheet("""
+            QPushButton#rootCalcBtn {
+                background-color: rgba(33, 150, 243, 0.8);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#rootCalcBtn:hover {
+                background-color: rgba(25, 118, 210, 0.9);
+            }
+        """)
+        self.root_calc_btn.clicked.connect(self.root_calculate)
+        button_layout.addWidget(self.root_calc_btn)
+        
+        self.root_copy_btn = QPushButton("复制结果")
+        self.root_copy_btn.setObjectName("rootCopyBtn")
+        self.root_copy_btn.setStyleSheet("""
+            QPushButton#rootCopyBtn {
+                background-color: rgba(255, 193, 7, 0.8);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#rootCopyBtn:hover {
+                background-color: rgba(255, 160, 0, 0.9);
+            }
+        """)
+        self.root_copy_btn.clicked.connect(self.root_copy)
+        button_layout.addWidget(self.root_copy_btn)
+        layout.addLayout(button_layout)
+        
+        # 结果显示区域
+        result_group = QGroupBox("结果")
+        result_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(224, 224, 224, 0.3);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+            }
+        """)
+        result_layout = QVBoxLayout(result_group)
+        self.root_result = QLineEdit()
+        self.root_result.setReadOnly(True)
+        self.root_result.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(245, 245, 245, 0.5);
+                border: 1px solid rgba(224, 224, 224, 0.5);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 16px;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                font-weight: bold;
+                color: #2196F3;
+            }
+        """)
+        result_layout.addWidget(self.root_result)
+        layout.addWidget(result_group)
+        
+        self.tab_widget.addTab(tab, "求根计算器")
+    
+    # Base64编解码功能
+    def base64_encode(self):
+        """Base64编码"""
+        import base64
+        try:
+            input_text = self.base64_input.toPlainText()
+            if not input_text:
+                QMessageBox.warning(self, "输入为空", "请输入要编码的文本")
+                return
+            encoded_bytes = base64.b64encode(input_text.encode('utf-8'))
+            encoded_text = encoded_bytes.decode('utf-8')
+            self.base64_result.setPlainText(encoded_text)
+        except Exception as e:
+            QMessageBox.critical(self, "编码错误", f"编码失败：{str(e)}")
+    
+    def base64_decode(self):
+        """Base64解码"""
+        import base64
+        try:
+            input_text = self.base64_input.toPlainText()
+            if not input_text:
+                QMessageBox.warning(self, "输入为空", "请输入要解码的文本")
+                return
+            decoded_bytes = base64.b64decode(input_text.encode('utf-8'))
+            decoded_text = decoded_bytes.decode('utf-8')
+            self.base64_result.setPlainText(decoded_text)
+        except Exception as e:
+            QMessageBox.critical(self, "解码错误", f"解码失败：{str(e)}")
+    
+    def base64_copy(self):
+        """复制Base64结果"""
+        result = self.base64_result.toPlainText()
+        if result:
+            clipboard = QApplication.clipboard()
+            clipboard.setText(result)
+            QMessageBox.information(self, "复制成功", "结果已复制到剪贴板")
+        else:
+            QMessageBox.warning(self, "复制失败", "没有可复制的结果")
+    
+    # AES加密解密功能
+    def aes_encrypt(self):
+        """AES加密"""
+        try:
+            from Crypto.Cipher import AES
+            from Crypto.Util.Padding import pad
+            
+            plaintext = self.aes_input.toPlainText()
+            if not plaintext:
+                QMessageBox.warning(self, "输入为空", "请输入要加密的文本")
+                return
+            
+            key = self.aes_key.text().encode('utf-8')
+            if len(key) not in [16, 24, 32]:
+                QMessageBox.warning(self, "密钥错误", "密钥长度必须为16、24或32位")
+                return
+            
+            mode = self.aes_mode.currentText()
+            if mode == "ECB":
+                cipher = AES.new(key, AES.MODE_ECB)
+                encrypted = cipher.encrypt(pad(plaintext.encode('utf-8'), AES.block_size))
+            else:
+                # CBC、CFB、OFB模式需要初始化向量
+                iv = b'0000000000000000'  # 使用固定IV，实际应用中应使用随机IV
+                if mode == "CBC":
+                    cipher = AES.new(key, AES.MODE_CBC, iv)
+                    encrypted = cipher.encrypt(pad(plaintext.encode('utf-8'), AES.block_size))
+                elif mode == "CFB":
+                    cipher = AES.new(key, AES.MODE_CFB, iv)
+                    encrypted = cipher.encrypt(plaintext.encode('utf-8'))
+                else:  # OFB
+                    cipher = AES.new(key, AES.MODE_OFB, iv)
+                    encrypted = cipher.encrypt(plaintext.encode('utf-8'))
+            
+            # 将加密结果转换为十六进制字符串
+            import binascii
+            encrypted_hex = binascii.hexlify(encrypted).decode('utf-8')
+            self.aes_result.setPlainText(encrypted_hex)
+        except ImportError:
+            QMessageBox.critical(self, "依赖错误", "AES加密需要PyCryptodome库，请安装：pip install pycryptodome")
+        except Exception as e:
+            QMessageBox.critical(self, "加密错误", f"加密失败：{str(e)}")
+    
+    def aes_decrypt(self):
+        """AES解密"""
+        try:
+            from Crypto.Cipher import AES
+            from Crypto.Util.Padding import unpad
+            
+            ciphertext = self.aes_input.toPlainText()
+            if not ciphertext:
+                QMessageBox.warning(self, "输入为空", "请输入要解密的文本")
+                return
+            
+            key = self.aes_key.text().encode('utf-8')
+            if len(key) not in [16, 24, 32]:
+                QMessageBox.warning(self, "密钥错误", "密钥长度必须为16、24或32位")
+                return
+            
+            # 将十六进制字符串转换为字节
+            import binascii
+            ciphertext_bytes = binascii.unhexlify(ciphertext.encode('utf-8'))
+            
+            mode = self.aes_mode.currentText()
+            if mode == "ECB":
+                cipher = AES.new(key, AES.MODE_ECB)
+                decrypted = unpad(cipher.decrypt(ciphertext_bytes), AES.block_size)
+            else:
+                # CBC、CFB、OFB模式需要初始化向量
+                iv = b'0000000000000000'  # 使用固定IV，实际应用中应使用随机IV
+                if mode == "CBC":
+                    cipher = AES.new(key, AES.MODE_CBC, iv)
+                    decrypted = unpad(cipher.decrypt(ciphertext_bytes), AES.block_size)
+                elif mode == "CFB":
+                    cipher = AES.new(key, AES.MODE_CFB, iv)
+                    decrypted = cipher.decrypt(ciphertext_bytes)
+                else:  # OFB
+                    cipher = AES.new(key, AES.MODE_OFB, iv)
+                    decrypted = cipher.decrypt(ciphertext_bytes)
+            
+            decrypted_text = decrypted.decode('utf-8')
+            self.aes_result.setPlainText(decrypted_text)
+        except ImportError:
+            QMessageBox.critical(self, "依赖错误", "AES解密需要PyCryptodome库，请安装：pip install pycryptodome")
+        except Exception as e:
+            QMessageBox.critical(self, "解密错误", f"解密失败：{str(e)}")
+    
+    def aes_copy(self):
+        """复制AES结果"""
+        result = self.aes_result.toPlainText()
+        if result:
+            clipboard = QApplication.clipboard()
+            clipboard.setText(result)
+            QMessageBox.information(self, "复制成功", "结果已复制到剪贴板")
+        else:
+            QMessageBox.warning(self, "复制失败", "没有可复制的结果")
+    
+    # MD5校验功能
+    def md5_browse_file(self):
+        """浏览文件"""
+        from PyQt5.QtWidgets import QFileDialog
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择文件", "", "所有文件 (*.*)")
+        if file_path:
+            self.md5_file_path.setText(file_path)
+            self.md5_text.clear()  # 清空文本输入，避免冲突
+    
+    def md5_calculate(self):
+        """计算MD5值"""
+        import hashlib
+        try:
+            file_path = self.md5_file_path.text()
+            text = self.md5_text.toPlainText()
+            
+            if file_path:
+                # 计算文件MD5
+                md5_hash = hashlib.md5()
+                with open(file_path, "rb") as f:
+                    for chunk in iter(lambda: f.read(4096), b""):
+                        md5_hash.update(chunk)
+                md5_value = md5_hash.hexdigest()
+            elif text:
+                # 计算文本MD5
+                md5_hash = hashlib.md5(text.encode('utf-8'))
+                md5_value = md5_hash.hexdigest()
+            else:
+                QMessageBox.warning(self, "输入为空", "请选择文件或输入文本")
+                return
+            
+            self.md5_result.setText(md5_value)
+        except Exception as e:
+            QMessageBox.critical(self, "计算错误", f"MD5计算失败：{str(e)}")
+    
+    def md5_copy(self):
+        """复制MD5结果"""
+        result = self.md5_result.text()
+        if result:
+            clipboard = QApplication.clipboard()
+            clipboard.setText(result)
+            QMessageBox.information(self, "复制成功", "结果已复制到剪贴板")
+        else:
+            QMessageBox.warning(self, "复制失败", "没有可复制的结果")
+    
+    # 幂计算器功能
+    def power_calculate(self):
+        """计算幂"""
+        try:
+            base_text = self.power_base.text()
+            exponent_text = self.power_exponent.text()
+            
+            if not base_text or not exponent_text:
+                QMessageBox.warning(self, "输入为空", "请输入底数和指数")
+                return
+            
+            base = float(base_text)
+            exponent = float(exponent_text)
+            result = base ** exponent
+            
+            # 格式化结果
+            if result.is_integer():
+                result = int(result)
+            self.power_result.setText(str(result))
+        except ValueError:
+            QMessageBox.critical(self, "输入错误", "请输入有效的数字")
+        except Exception as e:
+            QMessageBox.critical(self, "计算错误", f"计算失败：{str(e)}")
+    
+    def power_copy(self):
+        """复制幂计算结果"""
+        result = self.power_result.text()
+        if result:
+            clipboard = QApplication.clipboard()
+            clipboard.setText(result)
+            QMessageBox.information(self, "复制成功", "结果已复制到剪贴板")
+        else:
+            QMessageBox.warning(self, "复制失败", "没有可复制的结果")
+    
+    # 求根计算器功能
+    def on_root_index_changed(self, index):
+        """根指数选择变化处理"""
+        if index == 2:  # 自定义
+            self.custom_root_index.setEnabled(True)
+        else:
+            self.custom_root_index.setEnabled(False)
+            self.custom_root_index.clear()
+    
+    def root_calculate(self):
+        """计算根"""
+        try:
+            radicand_text = self.root_radicand.text()
+            if not radicand_text:
+                QMessageBox.warning(self, "输入为空", "请输入被开方数")
+                return
+            
+            radicand = float(radicand_text)
+            
+            # 获取根指数
+            index = self.root_index.currentIndex()
+            if index == 0:  # 平方根
+                root_index = 2
+            elif index == 1:  # 立方根
+                root_index = 3
+            else:  # 自定义
+                custom_index_text = self.custom_root_index.text()
+                if not custom_index_text:
+                    QMessageBox.warning(self, "输入为空", "请输入自定义根指数")
+                    return
+                root_index = float(custom_index_text)
+            
+            # 计算根
+            result = radicand ** (1 / root_index)
+            
+            # 格式化结果
+            if result.is_integer():
+                result = int(result)
+            self.root_result.setText(str(result))
+        except ValueError:
+            QMessageBox.critical(self, "输入错误", "请输入有效的数字")
+        except Exception as e:
+            QMessageBox.critical(self, "计算错误", f"计算失败：{str(e)}")
+    
+    def root_copy(self):
+        """复制求根结果"""
+        result = self.root_result.text()
+        if result:
+            clipboard = QApplication.clipboard()
+            clipboard.setText(result)
+            QMessageBox.information(self, "复制成功", "结果已复制到剪贴板")
+        else:
+            QMessageBox.warning(self, "复制失败", "没有可复制的结果")
 
 class ChatClient(QMainWindow):
     def __init__(self):
@@ -739,8 +1818,35 @@ QFrame#formContainer {
         bottom_layout.addWidget(self.change_wallpaper_button)  # 左侧放置按钮
         bottom_layout.addStretch()  # 右侧拉伸，将按钮固定在左下角
         
-        # 将底部布局添加到主布局
-        main_layout.addLayout(bottom_layout)
+        # 添加工具箱按钮到主布局
+        self.toolbox_button = QPushButton("工具箱")
+        self.toolbox_button.setObjectName("toolboxButton")
+        self.toolbox_button.setStyleSheet("""
+            QPushButton#toolboxButton {
+                background-color: rgba(156, 39, 176, 0.8);
+                color: white;
+                border: none;
+                border-radius: 20px;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#toolboxButton:hover {
+                background-color: rgba(136, 32, 155, 0.9);
+            }
+        """)
+        self.toolbox_button.clicked.connect(self.show_toolbox)
+        
+        # 创建底部功能按钮布局
+        bottom_function_layout = QHBoxLayout()
+        bottom_function_layout.setContentsMargins(10, 10, 10, 10)
+        bottom_function_layout.addWidget(self.change_wallpaper_button)
+        bottom_function_layout.addWidget(self.toolbox_button)
+        bottom_function_layout.addStretch()
+        
+        # 将底部功能布局添加到主布局
+        main_layout.addLayout(bottom_function_layout)
         
         # 初始显示连接界面
         main_layout.addWidget(self.connect_frame)
@@ -754,6 +1860,12 @@ QFrame#formContainer {
         self.comm.error_message.connect(self.show_error_message)
         self.comm.notification.connect(self.show_notification)
         self.comm.show_reconnect_dialog_signal.connect(self.show_reconnect_dialog)
+    
+    def show_toolbox(self):
+        """显示工具箱"""
+        self.toolbox_dialog = ToolboxDialog(self)
+        # 设置平滑的显示动画
+        self.toolbox_dialog.show()
 
     def connect_to_server(self):
         ip = self.ip_entry.text().strip()
@@ -1488,9 +2600,8 @@ QFrame#formContainer {
             # 构建API请求URL
             url = f"https://gitee.com/api/v5/repos/{GITEE_OWNER}/{GITEE_REPO}/releases/latest"
             
-            # 设置请求头，包含Token认证
+            # 设置请求头，不包含Token认证
             headers = {
-                "Authorization": f"token {GITEE_TOKEN}",
                 "Content-Type": "application/json"
             }
             
@@ -1623,9 +2734,8 @@ QFrame#formContainer {
     def download_latest_release(self, download_url, latest_version, file_name):
         """下载最新版本，参考服务端下载逻辑"""
         try:
-            # 设置请求头，包含Token认证
+            # 设置请求头，不包含Token认证
             headers = {
-                "Authorization": f"token {GITEE_TOKEN}",
                 "Accept": "*/*"  # 接受所有类型
             }
             

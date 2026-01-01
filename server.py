@@ -5,12 +5,11 @@ import os
 import requests
 
 # 版本信息
-CURRENT_VERSION = "3.1.0"
+CURRENT_VERSION = "3.2.0"
 
 # Gitee配置
 GITEE_OWNER = "MVPS680"
 GITEE_REPO = "MVPLittlechat"
-GITEE_TOKEN = "f19052b74c6322d54137ff8caa114093"
 
 def compare_versions(current_ver, latest_ver):
     """比较版本号，返回版本差异信息
@@ -55,9 +54,8 @@ def compare_versions(current_ver, latest_ver):
 def download_latest_release(download_url, latest_version, file_name=None):
     """下载最新版本"""
     try:
-        # 设置请求头，包含Token认证
+        # 设置请求头，不包含Token认证
         headers = {
-            "Authorization": f"token {GITEE_TOKEN}"
         }
         
         # 获取文件大小
@@ -101,9 +99,8 @@ def check_for_updates():
         # 构建API请求URL
         url = f"https://gitee.com/api/v5/repos/{GITEE_OWNER}/{GITEE_REPO}/releases/latest"
         
-        # 设置请求头，包含Token认证
+        # 设置请求头，不包含Token认证
         headers = {
-            "Authorization": f"token {GITEE_TOKEN}",
             "Content-Type": "application/json"
         }
         
