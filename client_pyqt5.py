@@ -159,6 +159,102 @@ class Communicate(QObject):
     notification = pyqtSignal(str, str, str)  # 用于发送通知弹窗，参数：标题、内容、类型
     show_reconnect_dialog_signal = pyqtSignal()  # 用于触发重连对话框的显示
 
+class WallpaperSourceDialog(QDialog):
+    """壁纸来源选择对话框"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("选择壁纸来源")
+        self.setGeometry(100, 100, 400, 200)
+        self.setMinimumSize(350, 180)
+        
+        # 设置窗口样式，与主界面风格一致
+        self.setStyleSheet("""
+            QDialog {
+                background-color: rgba(255, 255, 255, 0.3);
+                border-radius: 12px;
+                border: 2px solid rgba(224, 224, 224, 0.3);
+            }
+        """)
+        
+        # 创建主布局
+        main_layout = QVBoxLayout(self)
+        
+        # 添加标题标签
+        title_label = QLabel("请选择壁纸获取方式:")
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+                color: #333;
+                margin: 20px 0;
+            }
+        """)
+        main_layout.addWidget(title_label)
+        
+        # 创建按钮布局
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(20)
+        
+        # 从API获取按钮
+        self.api_button = QPushButton("从API获取")
+        self.api_button.setObjectName("apiButton")
+        self.api_button.setStyleSheet("""
+            QPushButton#apiButton {
+                background-color: rgba(33, 150, 243, 0.8);
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 12px 24px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#apiButton:hover {
+                background-color: rgba(25, 118, 210, 0.9);
+            }
+        """)
+        self.api_button.clicked.connect(lambda: self.select_source("api"))
+        button_layout.addWidget(self.api_button)
+        
+        # 从本地加载按钮
+        self.local_button = QPushButton("从本地加载")
+        self.local_button.setObjectName("localButton")
+        self.local_button.setStyleSheet("""
+            QPushButton#localButton {
+                background-color: rgba(76, 175, 80, 0.8);
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 12px 24px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Microsoft YaHei', SimSun, sans-serif;
+            }
+            QPushButton#localButton:hover {
+                background-color: rgba(69, 160, 73, 0.9);
+            }
+        """)
+        self.local_button.clicked.connect(lambda: self.select_source("local"))
+        button_layout.addWidget(self.local_button)
+        
+        main_layout.addLayout(button_layout)
+        main_layout.setAlignment(Qt.AlignCenter)
+        
+        # 实现平滑的显示/隐藏动画
+        self.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowModality(Qt.ApplicationModal)
+        
+        # 存储选择结果
+        self.selected_source = None
+    
+    def select_source(self, source):
+        """选择壁纸来源"""
+        self.selected_source = source
+        self.accept()
+
 class ToolboxDialog(QDialog):
     """工具箱对话框"""
     def __init__(self, parent=None):
@@ -1297,19 +1393,67 @@ class ChatClient(QMainWindow):
     
     def update_wallpaper(self):
         """更新壁纸"""
-        self._wallpaper_data = self.get_wallpaper()
-        if self._wallpaper_data:
-            pixmap = QPixmap()
-            pixmap.loadFromData(self._wallpaper_data)
-            palette = self.palette()
-            brush = QBrush(pixmap.scaled(
-                self.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation
-            ))
-            palette.setBrush(self.backgroundRole(), brush)
-            self.setPalette(palette)
-            self.setAutoFillBackground(True)
-        else:
-            QMessageBox.warning(self, "壁纸更新失败", "无法获取新壁纸，请检查网络连接后重试")
+        # 显示壁纸来源选择对话框
+        dialog = WallpaperSourceDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            source = dialog.selected_source
+            
+            if source == "api":
+                # 从API获取壁纸
+                self._wallpaper_data = self.get_wallpaper()
+                if self._wallpaper_data:
+                    self._apply_wallpaper(self._wallpaper_data)
+                else:
+                    QMessageBox.warning(self, "壁纸更新失败", "无法获取新壁纸，请检查网络连接后重试")
+            elif source == "local":
+                # 从本地加载壁纸
+                self._load_local_wallpaper()
+    
+    def _load_local_wallpaper(self):
+        """从本地加载壁纸"""
+        from PyQt5.QtWidgets import QFileDialog
+        import os
+        import shutil
+        
+        # 打开文件选择对话框
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择壁纸图片", "", "图片文件 (*.png *.jpg *.jpeg *.bmp *.gif)"
+        )
+        
+        if file_path:
+            try:
+                # 读取图片数据
+                with open(file_path, "rb") as f:
+                    self._wallpaper_data = f.read()
+                
+                # 应用壁纸
+                self._apply_wallpaper(self._wallpaper_data)
+                
+                # 创建LittleChat_background目录
+                bg_dir = os.path.join(os.getcwd(), "LittleChat_background")
+                if not os.path.exists(bg_dir):
+                    os.makedirs(bg_dir)
+                
+                # 复制图片到背景目录
+                file_name = os.path.basename(file_path)
+                dest_path = os.path.join(bg_dir, file_name)
+                shutil.copy2(file_path, dest_path)
+                
+                QMessageBox.information(self, "壁纸更新成功", f"壁纸已成功设置并复制到：\n{dest_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "壁纸加载失败", f"加载本地图片失败：{str(e)}")
+    
+    def _apply_wallpaper(self, wallpaper_data):
+        """应用壁纸"""
+        pixmap = QPixmap()
+        pixmap.loadFromData(wallpaper_data)
+        palette = self.palette()
+        brush = QBrush(pixmap.scaled(
+            self.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation
+        ))
+        palette.setBrush(self.backgroundRole(), brush)
+        self.setPalette(palette)
+        self.setAutoFillBackground(True)
 
     def initUI(self):
         # 初始化一言文本
