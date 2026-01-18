@@ -215,3 +215,5 @@ demo/
 test/
 *.serverset
 .idea/
+pyinstaller.bat
+LittleChat_background/
